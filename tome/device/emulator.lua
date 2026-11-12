@@ -136,6 +136,19 @@ function Emu:poll(timeout_ms)
 end
 
 function Emu:battery() return 87 end
+
+-- Simulated lights, so the display panel can be exercised on a desktop.
+function Emu:frontlight()
+    self.fl = self.fl or 12
+    return { level = self.fl, max = 24 }
+end
+function Emu:set_frontlight(level) self.fl = level end
+function Emu:warmth()
+    if self.config.no_warmth then return nil end
+    self.warm = self.warm or 6
+    return { level = self.warm, max = 24 }
+end
+function Emu:set_warmth(level) self.warm = level end
 --- The emulator "suspends" by delivering the sleep event the Kindle would send.
 function Emu:suspend() self.pending_power = { type = "power", event = "sleep" } end
 

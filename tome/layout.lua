@@ -241,7 +241,7 @@ function Layout:draw(canvas, page)
             canvas:fill_rect(self.opts.margin_x + (self.text_w - w) / 2, line.top + line.height / 2, w, 2, 80)
         else
             for _, it in ipairs(line.items) do
-                canvas:text(it.font, it.text, it.x, line.y, 0)
+                canvas:text(it.font, it.text, it.x, line.y, 0, self.opts.weight)
             end
         end
     end

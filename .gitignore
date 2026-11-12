@@ -5,3 +5,4 @@ emu_out/
 books/
 config.lua
 *.key
+fonts-src/

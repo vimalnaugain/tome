@@ -43,6 +43,23 @@ function UI:set_rotation(r)
     self:set_dirty("full")
 end
 
+--- Contrast: 0 normal, 1 darker, 2 darkest. A tone curve that darkens
+-- grey anti-aliasing and light text, applied to every frame.
+function UI:set_contrast(level)
+    level = math.max(0, math.min(2, level or 0))
+    self.contrast = level
+    if level == 0 then
+        self.tone_lut = nil
+    else
+        local ffi = require("ffi")
+        local gamma = ({ 1.6, 2.4 })[level]
+        local lut = ffi.new("uint8_t[256]")
+        for v = 0, 255 do lut[v] = math.floor(255 * (v / 255) ^ gamma + 0.5) end
+        self.tone_lut = lut
+    end
+    self:set_dirty("full")
+end
+
 function UI:show(view)
     self.stack[#self.stack + 1] = view
     view.ui = self
@@ -176,11 +193,16 @@ function UI:repaint()
             if not ok then log.error("draw failed:", err) end
         end
     end
+    if self.tone_lut then
+        local lut, buf = self.tone_lut, self.canvas.buf
+        for i = 0, self.canvas.w * self.canvas.h - 1 do buf[i] = lut[buf[i]] end
+    end
     self.device:refresh(self.canvas, mode)
 end
 
 function UI:dispatch(ev)
     if ev.type == "quit" then self:quit(); return end
+    if ev.type == "power_key" then ev = { type = "power", event = "button" } end
     if ev.type == "power" then
         if self.power_handler then
             local ok, err = pcall(self.power_handler, ev)

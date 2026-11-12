@@ -42,9 +42,11 @@ function App.new(opts)
     for k, v in pairs(cfg.settings or {}) do if self.settings[k] == nil then self.settings[k] = v end end
 
     self.stats = Stats.open(self.data_dir .. "/stats.lua")
+    self.settings.contrast = self.settings.contrast or 0
     self.covers = Covers.new(self)
     self.ui = UI.new(self.device)
     if self.settings.rotation and self.settings.rotation ~= 0 then self.ui:set_rotation(self.settings.rotation) end
+    if self.settings.contrast ~= 0 then self.ui:set_contrast(self.settings.contrast) end
     self.http = Http.new({ curl = cfg.curl, ca_bundle = cfg.ca_bundle, tmp_dir = cfg.tmp_dir or "/tmp" })
     self.json, self.log, self.util = json, log, util
 
@@ -280,6 +282,7 @@ end
 function App:on_wake()
     if not self.ui.sleeping then return end
     self.ui.sleeping = false
+    self.device:prevent_sleep(true) -- suspend() turned it off
     log.info("waking up")
     self.ui.last_input_ms = self.device:monotonic_ms()
     if self.reader then self.reader:resume() end
@@ -295,7 +298,18 @@ end
 function App:_setup_power()
     local ui, d = self.ui, self.device
     ui.power_handler = function(ev)
-        if ev.event == "sleep" then self:on_sleep() elseif ev.event == "wake" then self:on_wake() end
+        if ev.event == "sleep" then self:on_sleep()
+        elseif ev.event == "wake" then self:on_wake()
+        elseif ev.event == "button" and not ui.sleeping then
+            -- Power button pressed. The Kindle normally goes to sleep by
+            -- itself; if it hasn't within 1.5 s, ask it to.
+            ui:schedule(1500, function()
+                if not ui.sleeping and d.suspend then
+                    log.info("power button: system didn't sleep; requesting suspend")
+                    d:suspend()
+                end
+            end)
+        end
     end
     ui.last_input_ms = d:monotonic_ms()
     -- Tome keeps the Kindle awake while it runs (the Kindle can't see our

@@ -18,6 +18,8 @@ local util = require("tome.util")
 local Kindle = { name = "kindle", is_kindle = true }
 Kindle.__index = Kindle
 
+local KEY_POWER = 116
+
 local DEFAULT_KEYS = {
     [104] = "next", [109] = "prev", [191] = "next", [193] = "prev",
     [102] = "home", [139] = "menu", [158] = "back",
@@ -99,14 +101,21 @@ function Kindle:_open_inputs()
                 dev.xmin, dev.xmax = core.absinfo(fd, ax)
                 dev.ymin, dev.ymax = core.absinfo(fd, ay)
             elseif caps and caps.ev[core.EV_KEY] and caps.nkeys > 0 then
-                dev.keys = true
+                -- Only take keys Tome uses (page turn, home, d-pad, menu, back).
+                for code in pairs(self.keymap) do
+                    if caps.key[code] then dev.keys = true; break end
+                end
+                -- The power button belongs to the Kindle: listen, never grab,
+                -- or the system can no longer go to sleep (KOReader likewise
+                -- leaves it alone).
+                if caps.key[KEY_POWER] then dev.keys, dev.power = true, true end
             end
             if dev.touch or dev.keys then
-                if self.config.grab_input ~= false then core.grab(fd, true) end
+                if self.config.grab_input ~= false and not dev.power then core.grab(fd, true) end
                 dev.state = { x = 0, y = 0, down = false }
                 self.inputs[#self.inputs + 1] = dev
                 log.info(string.format("input %s (%s): %s%s range x=%s..%s y=%s..%s", path, name,
-                    dev.touch and "touch" or "keys", dev.mt and "/mt" or "",
+                    dev.touch and "touch" or (dev.power and "keys+power (not grabbed)" or "keys"), dev.mt and "/mt" or "",
                     tostring(dev.xmin), tostring(dev.xmax), tostring(dev.ymin), tostring(dev.ymax)))
             else
                 core.close(fd)
@@ -145,6 +154,8 @@ end
 
 --- Ask the system to go to sleep, as if the power button was pressed.
 function Kindle:suspend()
+    -- our "keep awake" flag must not stand in the way
+    self:prevent_sleep(false)
     sh("lipc-set-prop -i com.lab126.powerd powerButton 1")
 end
 
@@ -203,6 +214,8 @@ function Kindle:_handle_events(dev, events, now, out)
                 end
                 st.pending_down, st.pending_up, st.moved = false, false, false
             end
+        elseif t == core.EV_KEY and value == 1 and code == KEY_POWER then
+            out[#out + 1] = { type = "power_key" }
         elseif t == core.EV_KEY and value == 1 then
             local name = self.keymap[code]
             log.debug("key", code, name)
@@ -265,6 +278,41 @@ function Kindle:battery()
         local v = read_first_line(p)
         if v then return tonumber(v:match("%d+")) end
     end
+end
+
+------------------------------------------------------------------------------
+-- Front light and warm light, through the power daemon (same properties
+-- KOReader uses: flIntensity, currentAmberLevel). Levels are 0..max.
+------------------------------------------------------------------------------
+local function lipc_get_int(prop)
+    local p = io.popen("lipc-get-prop -i com.lab126.powerd " .. prop .. " 2>/dev/null")
+    if not p then return nil end
+    local v = tonumber((p:read("*a") or ""):match("%-?%d+"))
+    p:close()
+    return v
+end
+
+function Kindle:frontlight()
+    if self._fl_absent then return nil end
+    local level = lipc_get_int("flIntensity")
+    if not level then self._fl_absent = true; return nil end
+    return { level = level, max = self.config.frontlight_max or 24 }
+end
+
+function Kindle:set_frontlight(level)
+    sh("lipc-set-prop -i com.lab126.powerd flIntensity " .. math.floor(level))
+end
+
+--- Warm light (Oasis 3, Paperwhite Signature, Scribe...); nil if absent.
+function Kindle:warmth()
+    if self._warm_absent then return nil end
+    local level = lipc_get_int("currentAmberLevel")
+    if not level then self._warm_absent = true; return nil end
+    return { level = level, max = self.config.warmth_max or 24 }
+end
+
+function Kindle:set_warmth(level)
+    sh("lipc-set-prop -i com.lab126.powerd currentAmberLevel " .. math.floor(level))
 end
 
 --- Keep the Kindle from going to its screensaver while Tome runs.

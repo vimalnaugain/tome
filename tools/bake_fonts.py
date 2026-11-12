@@ -18,16 +18,41 @@ from PIL import Image, ImageDraw, ImageFont
 
 CROSEXTRA = "/usr/share/fonts/truetype/crosextra"
 TYPE1 = "/usr/share/fonts/X11/Type1"
+SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fonts-src")
+
+# face-style -> font file, or (variable font file, {axis name: value})
 FACES = {
-    # Reading faces: serif (Caladea), charter (Bitstream Charter), sans (Carlito)
+    # Caladea: the default serif
     "serif-regular": f"{CROSEXTRA}/Caladea-Regular.ttf",
     "serif-italic": f"{CROSEXTRA}/Caladea-Italic.ttf",
     "serif-bold": f"{CROSEXTRA}/Caladea-Bold.ttf",
     "serif-bolditalic": f"{CROSEXTRA}/Caladea-BoldItalic.ttf",
+    # Bitstream Charter: classic book face
     "charter-regular": f"{TYPE1}/c0648bt_.pfb",
     "charter-italic": f"{TYPE1}/c0649bt_.pfb",
     "charter-bold": f"{TYPE1}/c0632bt_.pfb",
     "charter-bolditalic": f"{TYPE1}/c0633bt_.pfb",
+    # Literata: designed for e-readers (Google Play Books)
+    "literata-regular": (f"{SRC}/Literata[opsz,wght].ttf", {"Weight": 400, "Optical size": 20}),
+    "literata-italic": (f"{SRC}/Literata-Italic[opsz,wght].ttf", {"Weight": 400, "Optical size": 20}),
+    "literata-bold": (f"{SRC}/Literata[opsz,wght].ttf", {"Weight": 700, "Optical size": 20}),
+    "literata-bolditalic": (f"{SRC}/Literata-Italic[opsz,wght].ttf", {"Weight": 700, "Optical size": 20}),
+    # Merriweather: sturdy, dark serif that suits e-ink
+    "merriweather-regular": (f"{SRC}/Merriweather[opsz,wdth,wght].ttf", {"Weight": 400, "Width": 100, "Optical size": 18}),
+    "merriweather-italic": (f"{SRC}/Merriweather-Italic[opsz,wdth,wght].ttf", {"Weight": 400, "Width": 100, "Optical size": 18}),
+    "merriweather-bold": (f"{SRC}/Merriweather[opsz,wdth,wght].ttf", {"Weight": 750, "Width": 100, "Optical size": 18}),
+    "merriweather-bolditalic": (f"{SRC}/Merriweather-Italic[opsz,wdth,wght].ttf", {"Weight": 750, "Width": 100, "Optical size": 18}),
+    # Bitter: slab serif made for screens, bold-looking
+    "bitter-regular": (f"{SRC}/Bitter[wght].ttf", {"Weight": 450}),
+    "bitter-italic": (f"{SRC}/Bitter-Italic[wght].ttf", {"Weight": 450}),
+    "bitter-bold": (f"{SRC}/Bitter[wght].ttf", {"Weight": 700}),
+    "bitter-bolditalic": (f"{SRC}/Bitter-Italic[wght].ttf", {"Weight": 700}),
+    # Atkinson Hyperlegible: very clear sans for low vision
+    "atkinson-regular": f"{SRC}/AtkinsonHyperlegible-Regular.ttf",
+    "atkinson-italic": f"{SRC}/AtkinsonHyperlegible-Italic.ttf",
+    "atkinson-bold": f"{SRC}/AtkinsonHyperlegible-Bold.ttf",
+    "atkinson-bolditalic": f"{SRC}/AtkinsonHyperlegible-BoldItalic.ttf",
+    # Carlito: sans for reading and the UI
     "sans-regular": f"{CROSEXTRA}/Carlito-Regular.ttf",
     "sans-italic": f"{CROSEXTRA}/Carlito-Italic.ttf",
     "sans-bold": f"{CROSEXTRA}/Carlito-Bold.ttf",
@@ -56,8 +81,21 @@ def has_glyph(font, ch):
     return mask.getbbox() is not None or ch.isspace() or ch in "\u00a0\u00ad"
 
 
-def bake(path, size, out_path):
-    primary = ImageFont.truetype(path, size)
+def load_face(spec, size):
+    if isinstance(spec, tuple):
+        path, axes = spec
+        font = ImageFont.truetype(path, size)
+        values = []
+        for axis in font.get_variation_axes():
+            name = axis["name"].decode() if isinstance(axis["name"], bytes) else axis["name"]
+            values.append(axes.get(name, axis["default"]))
+        font.set_variation_by_axes(values)
+        return font
+    return ImageFont.truetype(spec, size)
+
+
+def bake(spec, size, out_path):
+    primary = load_face(spec, size)
     fallback = ImageFont.truetype(FALLBACK, size)
     ascent, descent = primary.getmetrics()
     glyphs = []
@@ -90,9 +128,11 @@ def bake(path, size, out_path):
     return len(glyphs)
 
 
-def main(out_dir):
+def main(out_dir, only=None):
     os.makedirs(out_dir, exist_ok=True)
     for face, file in FACES.items():
+        if only and not face.startswith(only):
+            continue
         # sans doubles as the UI face, so it gets the union of both size sets
         sizes = SANS_SIZES if face.startswith("sans") else SERIF_SIZES
         for size in sizes:
@@ -102,4 +142,5 @@ def main(out_dir):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "fonts")
+    # optional second argument: bake only faces starting with this name
+    main(sys.argv[1] if len(sys.argv) > 1 else "fonts", sys.argv[2] if len(sys.argv) > 2 else None)

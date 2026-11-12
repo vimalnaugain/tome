@@ -178,6 +178,10 @@ test("kindle evdev touch parsing", function()
     -- page-turn key on a key device
     k:_handle_events({ keys = true, state = {} }, { { K, 104, 1 }, { K, 104, 0 } }, 5000, out)
     eq(out[4].type, "key"); eq(out[4].key, "next"); eq(#out, 4)
+    -- the power button is reported (Tome never grabs that device)
+    k:_handle_events({ keys = true, power = true, state = {} }, { { K, 116, 1 }, { K, 116, 0 } }, 5500, out)
+    eq(out[5].type, "power_key")
+    table.remove(out, 5)
     -- landscape: a tap on the physical right edge is at the logical bottom
     k:set_rotation(90)
     eq(k.width, 1448); eq(k.height, 1072)

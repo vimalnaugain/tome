@@ -49,8 +49,11 @@ function Canvas:invert_rect(x, y, w, h)
 end
 
 --- Draw a UTF-8 string with its baseline at y. Returns the x after the text.
-function Canvas:text(font, s, x, y, color)
+-- `bold` (0, 1 or 2) thickens strokes by that many pixels (text weight
+-- setting): each pixel takes the darkest coverage of its left neighbours.
+function Canvas:text(font, s, x, y, color, bold)
     color = color or 0
+    bold = bold or 0
     local buf, cw, ch = self.buf, self.w, self.h
     local blob = font.blob
     local pen = x
@@ -66,9 +69,15 @@ function Canvas:text(font, s, x, y, color)
                 if py >= 0 and py < ch then
                     local dst = py * cw
                     local src = off + row * gw
-                    for col = 0, gw - 1 do
+                    for col = 0, gw - 1 + bold do
                         local px = gx + col
-                        local a = blob[src + col]
+                        local a = col < gw and blob[src + col] or 0
+                        if bold > 0 then
+                            for k = 1, bold do
+                                local c2 = col - k
+                                if c2 >= 0 and c2 < gw and blob[src + c2] > a then a = blob[src + c2] end
+                            end
+                        end
                         if a > 0 and px >= 0 and px < cw then
                             local i = dst + px
                             -- alpha blend towards `color`

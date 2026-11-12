@@ -17,7 +17,13 @@ local Reader = {}
 Reader.__index = Reader
 
 local FONT_SIZES = { 22, 26, 30, 34, 40, 46, 54 }
-local FACES = { { "serif", "Caladea" }, { "charter", "Charter" }, { "sans", "Carlito (sans)" } }
+local FACES = {
+    { "serif", "Caladea" }, { "literata", "Literata" }, { "charter", "Charter" },
+    { "merriweather", "Merriweather" }, { "bitter", "Bitter" },
+    { "atkinson", "Atkinson Hyperlegible" }, { "sans", "Carlito" },
+}
+Reader.FACES = FACES
+Reader.FONT_SIZES = FONT_SIZES
 -- horizontal / vertical margins in inches
 local MARGINS = { narrow = { 0.12, 0.12 }, medium = { 0.22, 0.18 }, wide = { 0.36, 0.26 } }
 local MARGIN_ORDER = { "narrow", "medium", "wide" }
@@ -33,10 +39,16 @@ function Reader.open(app, path)
     local defaults = app.settings.reader or {}
     local st = util.load_table(self.state_path) or {}
     self.state = st
-    st.font_size = st.font_size or defaults.font_size or (app.device.dpi >= 250 and 34 or 22)
-    st.line_spacing = st.line_spacing or defaults.line_spacing or 1.3
-    st.face = st.face or defaults.face or "serif"
-    st.margins = st.margins or defaults.margins or "medium"
+    -- Display settings are shared by all books (app.settings.reader), like on
+    -- a Kindle; older per-book values seed them once.
+    app.settings.reader = app.settings.reader or {}
+    local disp = app.settings.reader
+    disp.font_size = disp.font_size or st.font_size or defaults.font_size or (app.device.dpi >= 250 and 34 or 22)
+    disp.line_spacing = disp.line_spacing or st.line_spacing or 1.3
+    disp.face = disp.face or st.face or "serif"
+    disp.margins = disp.margins or st.margins or "medium"
+    disp.weight = disp.weight or 0
+    self.display = disp
     st.footer_mode = st.footer_mode or 1
     st.position = st.position or { chapter = 1, block = 1, offset = 0 }
     -- chapter text lengths, filled in the background (for % and time left)
@@ -202,14 +214,16 @@ end
 function Reader:_relayout()
     local d = self.app.device
     local dpi = d.dpi
-    local m = MARGINS[self.state.margins] or MARGINS.medium
+    local disp = self.display
+    local m = MARGINS[disp.margins] or MARGINS.medium
     self.footer_h = math.floor(dpi * 0.3)
     self.margin_x = math.floor(dpi * m[1])
     self.layout = Layout.new({
-        width = d.width, height = d.height, face = self.state.face,
+        width = d.width, height = d.height, face = disp.face,
         margin_x = self.margin_x, margin_top = math.floor(dpi * m[2]),
         margin_bottom = self.footer_h + math.floor(dpi * 0.04),
-        font_size = self.state.font_size, line_spacing = self.state.line_spacing,
+        font_size = disp.font_size, line_spacing = disp.line_spacing,
+        weight = disp.weight or 0,
         justify = (self.app.settings.reader or {}).justify ~= false,
     })
     self.footer_font = Font.get("sans", "r", math.floor(dpi * 0.075))
@@ -325,8 +339,10 @@ function Reader:_finished_book()
 end
 
 function Reader:_set(key, value)
+    if self.display[key] == value then return end
     local pos = self:position()
-    self.state[key] = value
+    self.display[key] = value
+    self.app:save_settings()
     self:_relayout()
     self:_goto(pos)
     self:_save()
@@ -388,46 +404,10 @@ function Reader:show_toc()
     self.toc_view = self.ui:show(W.ListView.new({ title = "Contents", items = items, start_index = cur_index }))
 end
 
-local function choice(text, is_checked, apply)
-    return { text = text, checked = is_checked, callback = apply }
-end
-
-function Reader:display_items()
-    local st = self.state
-    local faces, sizes, spacings, margins, orient = {}, {}, {}, {}, {}
-    for _, f in ipairs(FACES) do
-        faces[#faces + 1] = choice(f[2], function() return st.face == f[1] end, function() self:_set("face", f[1]) end)
-    end
-    for _, s in ipairs(FONT_SIZES) do
-        sizes[#sizes + 1] = choice(tostring(s), function() return st.font_size == s end, function() self:_set("font_size", s) end)
-    end
-    for _, v in ipairs({ 1.15, 1.3, 1.45, 1.6 }) do
-        spacings[#spacings + 1] = choice(({ [1.15] = "Tight", [1.3] = "Normal", [1.45] = "Relaxed", [1.6] = "Loose" })[v],
-            function() return st.line_spacing == v end, function() self:_set("line_spacing", v) end)
-    end
-    for _, k in ipairs(MARGIN_ORDER) do
-        margins[#margins + 1] = choice(k:sub(1, 1):upper() .. k:sub(2), function() return st.margins == k end,
-            function() self:_set("margins", k) end)
-    end
-    for _, r in ipairs({ 0, 90, 270, 180 }) do
-        orient[#orient + 1] = choice(Rotation.NAMES[r], function() return (self.app.device.rotation or 0) == r end,
-            function() self.app:set_rotation(r) end)
-    end
-    local face_name = "Caladea"
-    for _, f in ipairs(FACES) do if f[1] == st.face then face_name = f[2] end end
-    return {
-        { text = function() return "Typeface: " .. face_name end, submenu = faces },
-        { text = function() return "Font size: " .. st.font_size end, submenu = sizes },
-        { text = "Line spacing", submenu = spacings },
-        { text = function() return "Margins: " .. st.margins end, submenu = margins },
-        { text = "Orientation", submenu = orient },
-    }
-end
-
 function Reader:menu_items()
     local items = {
         { text = "Contents", callback = function() self:show_toc() end },
-        { text = "Display", submenu = function() return self:display_items() end },
+        { text = "Display (Aa)", callback = function() self:show_display_panel() end },
     }
     local gotos = {}
     for p = 0, 90, 10 do
@@ -449,6 +429,10 @@ function Reader:menu_items()
     self.app:collect_menu("Reader", items, self)
     items[#items + 1] = { text = "Home", callback = function() self.app:close_reader() end }
     return items
+end
+
+function Reader:show_display_panel()
+    self.ui:show(require("tome.ui.display_panel").new(self))
 end
 
 function Reader:show_menu()
