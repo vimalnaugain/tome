@@ -13,6 +13,43 @@ local RecapPlugin = {}
 function RecapPlugin:init()
     self.Providers = self:require("providers")
     self.Recap = self:require("recap")
+    self.PhoneSetup = self:require("phone_setup")
+end
+
+function RecapPlugin:show_phone_setup()
+    local view = self.PhoneSetup.new()
+    local base_close = view.on_close
+    view.on_close = function(v)
+        base_close(v)
+        -- refresh the settings list behind us
+        local sv = self.app.settings_view
+        if sv and sv.on_show_again then sv.on_show_again() end
+    end
+    self.app.ui:show(view)
+end
+
+function RecapPlugin:addToSettingsMenu(items)
+    local name = self.settings:get("provider") or self.Providers.names()[1]
+    local p = name and self.Providers.get(name)
+    local sub = "Not set up. Tap to set up from your phone"
+    if p then
+        local key = self.app.keystore:get(name)
+        sub = (p.name or name) .. (key and ("  \194\183  key " .. self.app.keystore.mask(key)) or "")
+    end
+    items[#items + 1] = { text = "AI recap: set up from phone", subtext = sub,
+        callback = function() self:show_phone_setup() end }
+    local names = self.Providers.names()
+    if #names > 1 then
+        items[#items + 1] = { text = "AI recap: provider in use", subtext = name, callback = function()
+            local opts = {}
+            for _, n in ipairs(names) do opts[#opts + 1] = { text = n, value = n } end
+            self.app:choose({ title = "Recap provider", items = opts, on_choose = function(v)
+                self.settings:set("provider", v); self.settings:save()
+                local sv = self.app.settings_view
+                if sv and sv.on_show_again then sv.on_show_again() end
+            end })
+        end }
+    end
 end
 
 function RecapPlugin:_provider()
@@ -40,8 +77,11 @@ end
 function RecapPlugin:run(reader, kind)
     if self.busy then return end
     local provider, perr = self:_provider()
-    if not provider then
-        self.app:notify(perr, 6000)
+    if not provider or not provider.has_key then
+        self.app:confirm({ title = "Set up AI recap",
+            text = "Recaps need an AI provider. Set one up now from your phone? It takes a minute.",
+            ok_text = "Set up", on_ok = function() self:show_phone_setup() end })
+        if perr then require("tome.log").info("recap:", perr) end
         return
     end
     local progress

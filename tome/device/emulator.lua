@@ -136,6 +136,9 @@ function Emu:poll(timeout_ms)
 end
 
 function Emu:battery() return 87 end
+function Emu:wifi_ip() return self.config.ip or "127.0.0.1" end
+function Emu:open_port() end
+function Emu:close_port() end
 
 -- Simulated lights, so the display panel can be exercised on a desktop.
 function Emu:frontlight()

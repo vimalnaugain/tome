@@ -73,15 +73,19 @@ function Home:draw(c)
 
     -- Bottom rows (anchored), so the middle can adapt to the space left.
     local row_h = t.row_h
-    local bottom_y = h - 2 * row_h
+    local bottom_y = h - 3 * row_h
     c:fill_rect(0, bottom_y, w, t.border, 0)
     local lib_label = string.format("Library  \194\183  %d book%s", self.library_count, self.library_count == 1 and "" or "s")
     c:text(t.font, lib_label, mx, bottom_y + (row_h + t.font.ascent) / 2)
     c:text(t.bold, "\226\134\146", w - mx - t.bold:width("\226\134\146"), bottom_y + (row_h + t.bold.ascent) / 2)
     self.targets[#self.targets + 1] = { x = 0, y = bottom_y, w = w, h = row_h, action = function() app:show_library() end }
     c:fill_rect(mx, bottom_y + row_h, w - 2 * mx, 1, 200)
-    c:text(t.font, "Exit Tome", mx, bottom_y + row_h + (row_h + t.font.ascent) / 2, 60)
-    self.targets[#self.targets + 1] = { x = 0, y = bottom_y + row_h, w = w, h = row_h, action = function() app:confirm_quit() end }
+    c:text(t.font, "Settings", mx, bottom_y + row_h + (row_h + t.font.ascent) / 2)
+    c:text(t.bold, "\226\134\146", w - mx - t.bold:width("\226\134\146"), bottom_y + row_h + (row_h + t.bold.ascent) / 2)
+    self.targets[#self.targets + 1] = { x = 0, y = bottom_y + row_h, w = w, h = row_h, action = function() app:show_settings() end }
+    c:fill_rect(mx, bottom_y + 2 * row_h, w - 2 * mx, 1, 200)
+    c:text(t.font, "Exit Tome", mx, bottom_y + 2 * row_h + (row_h + t.font.ascent) / 2, 60)
+    self.targets[#self.targets + 1] = { x = 0, y = bottom_y + 2 * row_h, w = w, h = row_h, action = function() app:confirm_quit() end }
 
     -- Stats block, directly above the bottom rows.
     local stats = app.stats

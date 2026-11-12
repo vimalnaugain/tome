@@ -45,6 +45,7 @@ function App.new(opts)
     self.settings.contrast = self.settings.contrast or 0
     self.covers = Covers.new(self)
     self.library = require("tome.library").new(self)
+    self.keystore = require("tome.keystore").new(self)
     self.ui = UI.new(self.device)
     if self.settings.rotation and self.settings.rotation ~= 0 then self.ui:set_rotation(self.settings.rotation) end
     if self.settings.contrast ~= 0 then self.ui:set_contrast(self.settings.contrast) end
@@ -202,6 +203,38 @@ function App:set_rotation(r)
     self.settings.rotation = r
     self:save_settings()
     self.ui:set_rotation(r)
+end
+
+--- Settings screen: plugins add entries with addToSettingsMenu(items).
+function App:show_settings()
+    local view
+    local function build()
+        local items = {}
+        self:collect_menu("Settings", items, nil)
+        local Rotation = require("tome.device.rotation")
+        items[#items + 1] = { text = "Screen orientation", subtext = Rotation.NAMES[self.device.rotation or 0],
+            callback = function()
+                local opts = {}
+                for _, r in ipairs({ 0, 90, 270, 180 }) do opts[#opts + 1] = { text = Rotation.NAMES[r], value = r } end
+                self:choose({ title = "Screen orientation", items = opts, on_choose = function(r)
+                    self:set_rotation(r); view:set_items(build())
+                end })
+            end }
+        items[#items + 1] = { text = "Auto sleep", subtext = string.format("After %d idle minutes",
+            self.settings.sleep_after_minutes or self.config.sleep_after_minutes or 10), callback = function()
+            local opts = {}
+            for _, m in ipairs({ 5, 10, 15, 30, 60 }) do opts[#opts + 1] = { text = m .. " minutes", value = m } end
+            opts[#opts + 1] = { text = "Never", value = 0 }
+            self:choose({ title = "Auto sleep", items = opts, on_choose = function(m)
+                self.settings.sleep_after_minutes = m; self:save_settings(); view:set_items(build())
+            end })
+        end }
+        return items
+    end
+    view = self.ui:show(W.ListView.new({ title = "Settings", items = build() }))
+    view.on_show_again = function() view:set_items(build()) end
+    self.settings_view = view
+    return view
 end
 
 function App:show_main_menu()

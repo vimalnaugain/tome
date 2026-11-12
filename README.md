@@ -58,6 +58,19 @@ tools/package_kindle.sh
 
 This produces `build/tome-kindle.zip`.
 
+## Set up AI recaps from your phone
+
+On the home screen tap **Settings → AI recap: set up from phone**. Scan the QR
+code with your phone (same Wi-Fi), pick a provider, paste your API key and tap
+**Save to Kindle**. Tome tests the key straight away (by listing the provider's
+models, which is free) and shows the result.
+
+- The page only exists while that screen is open. It needs the one-time code from
+  the QR link and switches off after saving, after 10 minutes or after 5 wrong codes.
+- Keys are stored in `/var/local/tome` on the Kindle's internal storage (mode 600),
+  not on the USB drive, and are only ever shown masked.
+- `config.lua` and key files still work; a key set up from the phone takes priority.
+
 ## Install with KPM (no KUAL needed)
 
 If your Kindle has the Kindle Package Manager (KPM, included with current

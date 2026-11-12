@@ -19,6 +19,9 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -111,6 +114,58 @@ static int l_absinfo(lua_State *L) {
     lua_pushinteger(L, info.minimum);
     lua_pushinteger(L, info.maximum);
     return 2;
+}
+
+/* tcp_listen(ip, port) -> fd | nil, err   (non-blocking, SO_REUSEADDR) */
+static int l_tcp_listen(lua_State *L) {
+    const char *ip = luaL_checkstring(L, 1);
+    int port = (int)luaL_checkinteger(L, 2);
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((unsigned short)port);
+    if (inet_pton(AF_INET, ip, &addr.sin_addr) != 1) {
+        lua_pushnil(L); lua_pushstring(L, "bad IP address"); return 2;
+    }
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return push_errno(L);
+    int one = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0 || listen(fd, 4) < 0) {
+        int e = errno; close(fd); errno = e; return push_errno(L);
+    }
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
+    lua_pushinteger(L, fd);
+    return 1;
+}
+
+/* accept(fd) -> client_fd, peer_ip | nil (nothing waiting) */
+static int l_accept(lua_State *L) {
+    struct sockaddr_in peer;
+    socklen_t len = sizeof(peer);
+    int c = accept((int)luaL_checkinteger(L, 1), (struct sockaddr *)&peer, &len);
+    if (c < 0) { lua_pushnil(L); return 1; }
+    fcntl(c, F_SETFL, fcntl(c, F_GETFL) | O_NONBLOCK);
+    fcntl(c, F_SETFD, FD_CLOEXEC);
+    char buf[INET_ADDRSTRLEN] = "?";
+    inet_ntop(AF_INET, &peer.sin_addr, buf, sizeof(buf));
+    lua_pushinteger(L, c);
+    lua_pushstring(L, buf);
+    return 2;
+}
+
+/* write(fd, data) -> bytes written | nil, err */
+static int l_write(lua_State *L) {
+    size_t len;
+    const char *data = luaL_checklstring(L, 2, &len);
+    ssize_t w = send((int)luaL_checkinteger(L, 1), data, len, MSG_NOSIGNAL);
+    if (w < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) { lua_pushinteger(L, 0); return 1; }
+        return push_errno(L);
+    }
+    lua_pushinteger(L, (lua_Integer)w);
+    return 1;
 }
 
 /* stat(path) -> size, mtime, is_dir | nil, err */
@@ -238,6 +293,9 @@ static const luaL_Reg funcs[] = {
     {"read_events", l_read_events},
     {"read", l_read},
     {"stat", l_stat},
+    {"tcp_listen", l_tcp_listen},
+    {"accept", l_accept},
+    {"write", l_write},
     {"poll", l_poll},
     {"fbinfo", l_fbinfo},
     {"monotonic_ms", l_monotonic_ms},
@@ -247,6 +305,8 @@ static const luaL_Reg funcs[] = {
 };
 
 int luaopen_tomecore(lua_State *L) {
+    /* A phone closing the setup page early must not kill Tome. */
+    signal(SIGPIPE, SIG_IGN);
     lua_newtable(L);
     luaL_register(L, NULL, funcs);
     /* Constants the Lua side needs. */

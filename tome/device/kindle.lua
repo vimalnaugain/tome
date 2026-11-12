@@ -315,6 +315,38 @@ function Kindle:set_warmth(level)
     sh("lipc-set-prop -i com.lab126.powerd currentAmberLevel " .. math.floor(level))
 end
 
+------------------------------------------------------------------------------
+-- Network helpers for the phone setup page.
+------------------------------------------------------------------------------
+
+--- IPv4 address on Wi-Fi, or nil when not connected.
+function Kindle:wifi_ip()
+    for _, cmd in ipairs({ "ifconfig wlan0 2>/dev/null", "ip -4 addr show wlan0 2>/dev/null" }) do
+        local p = io.popen(cmd)
+        local out = p and p:read("*a") or ""
+        if p then p:close() end
+        local ip = out:match("inet addr:(%d+%.%d+%.%d+%.%d+)") or out:match("inet (%d+%.%d+%.%d+%.%d+)")
+        if ip and ip ~= "127.0.0.1" then return ip end
+    end
+end
+
+-- The Kindle firewall drops incoming connections; open one port on Wi-Fi
+-- only while the setup page runs (KOReader's SSH plugin does the same).
+local function fw_rules(port)
+    return {
+        string.format("INPUT -i wlan0 -p tcp --dport %d -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT", port),
+        string.format("OUTPUT -o wlan0 -p tcp --sport %d -m conntrack --ctstate ESTABLISHED -j ACCEPT", port),
+    }
+end
+
+function Kindle:open_port(port)
+    for _, r in ipairs(fw_rules(port)) do sh("iptables -I " .. r) end
+end
+
+function Kindle:close_port(port)
+    for _, r in ipairs(fw_rules(port)) do sh("iptables -D " .. r) end
+end
+
 --- Keep the Kindle from going to its screensaver while Tome runs.
 function Kindle:prevent_sleep(on)
     sh("lipc-set-prop com.lab126.powerd preventScreenSaver " .. (on and "1" or "0"))

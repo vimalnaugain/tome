@@ -263,6 +263,63 @@ test("library finds books in any folder and sorts them", function()
     assert(util.file_exists(tmp .. "/libindex.lua"))
 end)
 
+test("phone setup: page, wrong code, save, key stored securely and verified", function()
+    local util = require("tome.util")
+    local plugin = app.plugins.by_name.recap
+    -- mock provider server (speaks the OpenAI-style /models API)
+    local port = 18791
+    os.execute("python3 tests/mock_llm.py " .. port .. " " .. tmp .. "/mock.jsonl >/dev/null 2>&1 & echo $! > " .. tmp .. "/mock.pid")
+    os.execute("sleep 1")
+    local view = plugin.PhoneSetup.new()
+    app.ui:show(view)
+    assert(view.server and view.server:running(), "server should be running: " .. tostring(view.status))
+    local base = view.url:gsub("/$", "")
+    local function curl(args, out)
+        os.execute("curl -s -m 5 " .. args .. " > " .. out .. " 2>&1 &")
+    end
+    local function pump(file)
+        for _ = 1, 100 do
+            view.server:step()
+            local s = util.read_file(file)
+            if s and #s > 0 then return s end
+            os.execute("sleep 0.05")
+        end
+    end
+    -- the QR link shows the form with the code embedded
+    curl("'" .. view.server:qr_url() .. "'", tmp .. "/p1.html")
+    local p1 = pump(tmp .. "/p1.html") or ""
+    assert(p1:find("name=c value='" .. view.code .. "'", 1, true), "form should carry the code")
+    -- wrong code is rejected
+    curl("-d 'c=000000&provider=gemini&key=x' " .. base .. "/save", tmp .. "/p2.html")
+    assert((pump(tmp .. "/p2.html") or ""):find("Wrong code", 1, true))
+    -- a different Host header is refused (DNS rebinding)
+    curl("-H 'Host: evil.example' " .. base .. "/", tmp .. "/p3.html")
+    assert((pump(tmp .. "/p3.html") or ""):find("address shown on your Kindle", 1, true))
+    -- correct code saves the key and stops the server
+    local url = "http://127.0.0.1:" .. port .. "/gemini/v1beta/openai"
+    curl("--data-urlencode 'c=" .. view.code .. "' -d provider=ollama --data-urlencode 'key=test-key' --data-urlencode 'url=" .. url .. "' " .. base .. "/save", tmp .. "/p4.html")
+    assert((pump(tmp .. "/p4.html") or ""):find("Saved", 1, true))
+    assert(not view.server:running(), "server should stop after a successful save")
+    -- key is in the secure store, not in plugin settings
+    eq(app.keystore:get("ollama"), "test-key")
+    local settings_text = util.read_file(plugin.settings.path) or ""
+    assert(not settings_text:find("test-key", 1, true), "key must not be in settings files")
+    local mode = io.popen("stat -c %a " .. app.keystore:path("ollama")):read("*l")
+    eq(mode, "600", "key file permissions")
+    eq(plugin.settings:get("provider"), "ollama")
+    -- the background verification lists models and reports success
+    for _ = 1, 100 do
+        app.ui:_run_tasks()
+        if view.done then break end
+        os.execute("sleep 0.05")
+    end
+    assert(view.done and view.status_kind == "ok", "verification: " .. tostring(view.status))
+    assert(view.status:find("Key works", 1, true))
+    assert(not view.status:find("test-key", 1, true), "status must not show the whole key")
+    app.ui:close(view)
+    os.execute("kill $(cat " .. tmp .. "/mock.pid) 2>/dev/null")
+end)
+
 test("image decoders match PIL (baseline, progressive, PNG)", function()
     local Image = require("tome.image")
     local ffi = require("ffi")

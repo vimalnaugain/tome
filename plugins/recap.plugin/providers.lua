@@ -55,6 +55,9 @@ end
 Providers.clean_key = clean_key
 
 local function api_key(cfg)
+    -- a key set up from the phone (secure store) wins over config.lua
+    local stored = cfg._name and app.keystore and app.keystore:get(cfg._name)
+    if stored then return clean_key(stored) end
     if cfg.api_key and cfg.api_key ~= "" then return clean_key(cfg.api_key) end
     if cfg.api_key_file then
         local raw = util.read_file(cfg.api_key_file)
@@ -111,6 +114,16 @@ local function anthropic(cfg)
     local base = (cfg.base_url or "https://api.anthropic.com"):gsub("/$", "")
     local model = cfg.model or "claude-opus-5-5"
     local p = { name = cfg.label or ("Claude (" .. model .. ")"), model = model }
+    function p.list_models()
+        local key = api_key(cfg)
+        if not key then return false, "No API key saved for Claude." end
+        local res, err = app.http:request({ url = base .. "/v1/models", method = "GET", timeout = 60,
+            headers = { ["x-api-key"] = key, ["anthropic-version"] = ANTHROPIC_VERSION } })
+        if not res then return false, err end
+        if res.status ~= 200 then return false, string.format("HTTP %d: %s", res.status, error_message(res)) end
+        return true, "Key works. Using " .. model
+    end
+
     function p.complete(system, user, opts)
         opts = opts or {}
         local key = api_key(cfg)
@@ -207,6 +220,19 @@ local function openai(cfg)
         return best
     end
 
+    --- Verify the key by listing models (free). Returns ok, message.
+    function p.list_models()
+        if cfg.model == nil or cfg.model == "auto" then
+            local m, err = auto_model(true)
+            if not m then return false, err end
+            return true, "Key works. Using " .. m
+        end
+        local res, err = app.http:request({ url = base .. "/models", method = "GET", headers = headers(), timeout = 60 })
+        if not res then return false, err end
+        if res.status ~= 200 then return false, string.format("HTTP %d: %s", res.status, error_message(res)) end
+        return true, "Key works. Using " .. cfg.model
+    end
+
     function p.complete(system, user, opts)
         opts = opts or {}
         local model = cfg.model
@@ -254,21 +280,87 @@ end
 
 local BUILDERS = { anthropic = anthropic, openai = openai, ollama = openai }
 
---- Build the provider named `name` from the plugin config.
-function Providers.get(name)
-    local all = plugin.settings:get("providers", {})
-    local cfg = all[name]
-    if not cfg then return nil, "Unknown provider '" .. tostring(name) .. "'. Check config.lua." end
-    local builder = BUILDERS[cfg.type or name]
-    if not builder then return nil, "Unknown provider type '" .. tostring(cfg.type) .. "'" end
-    return builder(cfg)
+--- Built-in providers: phone setup only needs a name and a key.
+Providers.PRESETS = {
+    { id = "gemini", label = "Google Gemini (free tier)", type = "openai",
+      base_url = "https://generativelanguage.googleapis.com/v1beta/openai", model = "auto", prefer = "flash" },
+    { id = "claude", label = "Anthropic Claude", type = "anthropic", model = "claude-opus-5-5" },
+    { id = "openai", label = "OpenAI", type = "openai", base_url = "https://api.openai.com/v1",
+      model = "auto", prefer = "mini" },
+    { id = "openrouter", label = "OpenRouter", type = "openai", base_url = "https://openrouter.ai/api/v1",
+      model = "auto", prefer = ":free" },
+    { id = "groq", label = "Groq", type = "openai", base_url = "https://api.groq.com/openai/v1",
+      model = "auto", prefer = "llama" },
+    { id = "ollama", label = "Ollama on your computer", type = "openai", model = "auto", prefer = "",
+      needs_url = true, no_key = true },
+}
+local PRESET_BY_ID = {}
+for _, p in ipairs(Providers.PRESETS) do PRESET_BY_ID[p.id] = p end
+
+local function merged(name)
+    local cfg = {}
+    for _, src in ipairs({ PRESET_BY_ID[name] or {},
+        plugin.settings:get("providers", {})[name] or {},
+        plugin.settings:get("phone_providers", {})[name] or {} }) do
+        for k, v in pairs(src) do cfg[k] = v end
+    end
+    if next(cfg) == nil then return nil end
+    cfg._name = name
+    return cfg
 end
 
+--- Build the provider named `name` (config.lua, phone setup or a preset).
+function Providers.get(name)
+    local cfg = merged(name)
+    if not cfg then return nil, "Unknown provider '" .. tostring(name) .. "'. Set one up in Settings." end
+    local builder = BUILDERS[cfg.type or name]
+    if not builder then return nil, "Unknown provider type '" .. tostring(cfg.type) .. "'" end
+    local p = builder(cfg)
+    p.id = name
+    p.has_key = cfg.no_key or (api_key(cfg) ~= nil)
+    return p
+end
+
+--- Providers that can be used: configured in config.lua, set up from the
+-- phone, or a preset whose key is in the secure store.
 function Providers.names()
+    local set = {}
+    for k in pairs(plugin.settings:get("providers", {})) do set[k] = true end
+    for k in pairs(plugin.settings:get("phone_providers", {})) do set[k] = true end
+    for _, p in ipairs(Providers.PRESETS) do
+        if app.keystore and app.keystore:get(p.id) then set[p.id] = true end
+    end
     local out = {}
-    for k in pairs(plugin.settings:get("providers", {})) do out[#out + 1] = k end
+    for k in pairs(set) do out[#out + 1] = k end
     table.sort(out)
     return out
+end
+
+--- Save a provider set up from the phone and make it the active one.
+-- The key goes to the secure store, never into settings files.
+function Providers.save_phone_setup(id, key, model, base_url)
+    assert(PRESET_BY_ID[id], "unknown provider " .. tostring(id))
+    if key and key ~= "" then app.keystore:set(id, clean_key(key)) end
+    local phone = plugin.settings:get("phone_providers", {})
+    local entry = {}
+    if model and model ~= "" then entry.model = model end
+    if base_url and base_url ~= "" then entry.base_url = base_url end
+    phone[id] = entry
+    plugin.settings:set("phone_providers", phone)
+    plugin.settings:set("provider", id)
+    -- forget an automatically chosen model; pick afresh with the new key
+    local cfg = merged(id)
+    if cfg and cfg.base_url then plugin.settings:set("auto_model:" .. cfg.base_url:gsub("/$", ""), nil) end
+    plugin.settings:save()
+end
+
+--- Check a provider works without spending tokens: list its models.
+-- Returns ok, message.
+function Providers.verify(id)
+    local p, err = Providers.get(id)
+    if not p then return false, err end
+    if p.list_models then return p.list_models() end
+    return true, "Saved"
 end
 
 return Providers
