@@ -7,6 +7,7 @@ local W = require("tome.ui.widgets")
 local Http = require("tome.http")
 local Plugins = require("tome.plugins")
 local Font = require("tome.font")
+local Stats = require("tome.stats")
 local util = require("tome.util")
 local json = require("tome.json")
 local log = require("tome.log")
@@ -39,7 +40,9 @@ function App.new(opts)
     self.settings = util.load_table(self.settings_path) or {}
     for k, v in pairs(cfg.settings or {}) do if self.settings[k] == nil then self.settings[k] = v end end
 
+    self.stats = Stats.open(self.data_dir .. "/stats.lua")
     self.ui = UI.new(self.device)
+    if self.settings.rotation and self.settings.rotation ~= 0 then self.ui:set_rotation(self.settings.rotation) end
     self.http = Http.new({ curl = cfg.curl, ca_bundle = cfg.ca_bundle, tmp_dir = cfg.tmp_dir or "/tmp" })
     self.json, self.log, self.util = json, log, util
 
@@ -134,7 +137,10 @@ function App:recent_books()
     local list = {}
     for _, e in ipairs(util.list_dir(self.data_dir .. "/books")) do
         local t = util.load_table(self.data_dir .. "/books/" .. e.name)
-        if t and t.path and t.last_read and util.file_exists(t.path) then list[#list + 1] = t end
+        if t and t.path and t.last_read and util.file_exists(t.path) then
+            t.id = e.name:gsub("%.lua$", "")
+            list[#list + 1] = t
+        end
     end
     table.sort(list, function(a, b) return a.last_read > b.last_read end)
     return list
@@ -142,6 +148,9 @@ end
 
 function App:open_book(path)
     if self.reader then self:close_reader() end
+    -- Opening a book from the library or a list: drop those views, so
+    -- leaving the book goes straight back home.
+    while self.ui:top() and self.ui:top() ~= self.home do self.ui:close(self.ui:top()) end
     local Reader = require("tome.ui.reader")
     local reader, err = Reader.open(self, path)
     if not reader then
@@ -168,7 +177,7 @@ function App:close_reader()
     self.reader = nil
     self.settings.last_book = nil
     self:save_settings()
-    if self.library then self.library:load(self.library.dir) end
+    if self.home then self.home:refresh() end
     self.ui:set_dirty("full")
 end
 
@@ -176,9 +185,30 @@ function App:save_settings()
     util.save_table(self.settings_path, self.settings)
 end
 
+function App:show_library()
+    local FileBrowser = require("tome.ui.filebrowser")
+    util.mkdir_p(self.books_dir)
+    self.ui:show(FileBrowser.new(self, self.books_dir))
+end
+
+--- Screen orientation (0, 90, 180, 270), remembered across launches.
+function App:set_rotation(r)
+    self.settings.rotation = r
+    self:save_settings()
+    self.ui:set_rotation(r)
+end
+
 function App:show_main_menu()
     local items = {}
     self:collect_menu("Main", items, nil)
+    local orient = {}
+    local Rotation = require("tome.device.rotation")
+    for _, r in ipairs({ 0, 90, 270, 180 }) do
+        orient[#orient + 1] = { text = Rotation.NAMES[r], checked = function() return (self.device.rotation or 0) == r end,
+            callback = function() self:set_rotation(r) end }
+    end
+    table.insert(items, 1, { text = "Library", callback = function() self:show_library() end })
+    items[#items + 1] = { text = "Orientation", submenu = orient }
     items[#items + 1] = { text = "Exit Tome", callback = function() self:quit() end }
     self.ui:show(W.Menu.new({ title = "Tome", items = items }))
 end
@@ -194,15 +224,14 @@ end
 
 function App:run(open_path)
     self.device:prevent_sleep(true)
-    local FileBrowser = require("tome.ui.filebrowser")
-    util.mkdir_p(self.books_dir)
-    self.library = self.ui:show(FileBrowser.new(self, self.books_dir))
+    self.home = self.ui:show(require("tome.ui.home").new(self))
     self:broadcast("AppStart", self)
     local resume = open_path or (self.settings.resume_last ~= false and self.settings.last_book)
     if resume and util.file_exists(resume) then self:open_book(resume) end
     local ok, err = xpcall(function() self.ui:run() end, debug.traceback)
     if not ok then log.error("fatal:", err) end
     if self.reader then self.reader:close() end
+    self.stats:save()
     self:broadcast("Exit", self)
     self:save_settings()
     self.device:close()

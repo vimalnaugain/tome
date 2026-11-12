@@ -362,6 +362,10 @@ function TextViewer.to_blocks(text)
     return blocks
 end
 
+function TextViewer:on_resize()
+    self.pages_cache = nil
+end
+
 function TextViewer:set_text(text)
     self.text = text
     self.pages_cache = nil
@@ -485,7 +489,8 @@ function Dialog:handle(ev)
                 return true
             end
         end
-        if self.dismissable and #self.buttons == 0 then self.ui:close(self) end
+        -- tap outside closes; with no buttons, any tap closes
+        if self.dismissable and (#self.buttons == 0 or not inside(ev, self.rect)) then self.ui:close(self) end
     elseif ev.type == "key" and ev.key == "back" and self.dismissable then
         self.ui:close(self)
     end

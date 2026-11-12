@@ -62,7 +62,8 @@ Menu items: `{ text = string|fn, callback = fn, submenu = items|fn, checked = bo
 | Method | Returns |
 |---|---|
 | `book_info()` | `{ id, title, authors, language, path, chapters }` (`id` is stable across renames) |
-| `position()` | first char on screen: `{ chapter, block, offset, percent, chapter_title, page, pages }` |
+| `position()` | first char on screen: `{ chapter, block, offset, percent, chapter_title, page, pages, chapter_seconds_left, book_seconds_left }` |
+| `time_left()` | seconds left in the chapter and in the book, at the reader's learned pace |
 | `page_end()` | position just past the last char on screen |
 | `chapters()` | `{ {index, title}, … }` |
 | `text_range(from, to)` | plain text, paragraphs separated by blank lines, headings as `## …`; `nil` bounds = start/end of book |
@@ -83,6 +84,7 @@ Menu items: `{ text = string|fn, callback = fn, submenu = items|fn, checked = bo
 | `app:run_task(fn, on_error)` | run `fn` as a coroutine; returns `{ cancel }` |
 | `app.http:request{url, method, headers, body, timeout}` | `{status, body, json}` or `nil, err`. Inside a task it yields (UI stays responsive); `body` may be a table (sent as JSON) |
 | `app.json`, `app.util`, `app.log` | helpers |
-| `app.device` | `width`, `height`, `dpi`, `is_kindle`, `battery()`, `wifi_enable()` |
+| `app.device` | `width`, `height` (logical, after rotation), `dpi`, `rotation`, `is_kindle`, `battery()`, `wifi_enable()` |
+| `app.stats` | reading statistics: `chars_per_minute()`, `year()`, `week_seconds()`, `streak_days()`, `is_finished(id)` |
 | `app.ui:schedule(ms, fn)` | timer |
 | `require("tome.ui.manager").await(pred)` | inside a task: wait until `pred()` is true; returns `false` if cancelled |

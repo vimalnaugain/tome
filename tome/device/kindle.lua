@@ -11,6 +11,7 @@ protocol B or single-touch ABS_X/Y, scaled using EVIOCGABS ranges.
 --]]
 local core = require("tomecore")
 local Gestures = require("tome.device.gestures")
+local Rotation = require("tome.device.rotation")
 local log = require("tome.log")
 local util = require("tome.util")
 
@@ -51,8 +52,10 @@ function Kindle.new(config)
         h = h or fb.yres
         log.info(string.format("fb0: %dx%d bpp=%d line=%d rotate=%d", fb.xres, fb.yres, fb.bpp, fb.line_length, fb.rotate))
     end
-    self.width, self.height = w or 1072, h or 1448
-    self.dpi = c.dpi or (self.width >= 1000 and 300 or 167)
+    self.phys_w, self.phys_h = w or 1072, h or 1448
+    self.width, self.height = self.phys_w, self.phys_h
+    self.rotation = 0
+    self.dpi = c.dpi or (math.min(self.phys_w, self.phys_h) >= 1000 and 300 or 167)
     self.eips = c.eips_path or "/usr/sbin/eips"
     self.png_path = c.screen_png or "/tmp/tome_screen.png"
     self.flash_every = c.flash_every or 6
@@ -119,7 +122,8 @@ function Kindle:_scale(dev, rx, ry)
     local sy = (ymax > ymin) and (y - ymin) / (ymax - ymin) or 0
     if c.touch_mirror_x then sx = 1 - sx end
     if c.touch_mirror_y then sy = 1 - sy end
-    return math.floor(sx * (self.width - 1) + 0.5), math.floor(sy * (self.height - 1) + 0.5)
+    local px, py = math.floor(sx * (self.phys_w - 1) + 0.5), math.floor(sy * (self.phys_h - 1) + 0.5)
+    return Rotation.to_logical(px, py, self.phys_w, self.phys_h, self.rotation)
 end
 
 --- Translate raw evdev events from one device into gesture/key events.
@@ -176,6 +180,12 @@ function Kindle:poll(timeout_ms)
 end
 
 --- Push a canvas to the screen. mode: "full" (flash), "partial", "auto".
+--- Set the screen orientation (0, 90, 180, 270). Views must re-layout after.
+function Kindle:set_rotation(r)
+    self.rotation = Rotation.normalize(r)
+    self.width, self.height = Rotation.dims(self.phys_w, self.phys_h, self.rotation)
+end
+
 function Kindle:refresh(canvas, mode, region)
     local flash = mode == "full"
     if mode ~= "full" then
@@ -183,7 +193,9 @@ function Kindle:refresh(canvas, mode, region)
         if self.flash_every > 0 and self.updates_since_flash >= self.flash_every then flash = true end
     end
     if flash then self.updates_since_flash = 0 end
-    if region and self.partial_updates and not flash then
+    canvas = Rotation.to_physical_canvas(canvas, self.phys_w, self.phys_h, self.rotation, self._phys_canvas)
+    if canvas.w == self.phys_w and self.rotation ~= 0 then self._phys_canvas = canvas end
+    if region and self.partial_updates and not flash and self.rotation == 0 then
         local png = canvas:to_png(region.x, region.y, region.w, region.h)
         util.write_file(self.png_path, png)
         sh(string.format("%s -x %d -y %d -g %s", self.eips, region.x, region.y, self.png_path))

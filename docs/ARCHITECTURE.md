@@ -32,7 +32,8 @@ closed binaries and wasn't needed here.
 main.lua                    args, config.lua, App.new():run()
 tome/app.lua                device + UI + settings + plugins + open book; the `app` plugins see
 tome/ui/manager.lua         view stack, event loop, timers, coroutine tasks (UI.await)
-tome/ui/{reader,filebrowser,widgets}.lua
+tome/ui/{home,reader,filebrowser,widgets}.lua
+tome/stats.lua              reading time per day/book, learned reading speed, finished books
 tome/layout.lua             blocks -> lines -> pages
 tome/epub.lua               container.xml, OPF, nav/NCX, lazy chapter parsing, text_range()
 tome/{html,xml,zip,inflate}.lua
@@ -40,6 +41,7 @@ tome/{font,canvas}.lua      bitmap glyphs, 8-bit canvas, PNG encoder
 tome/http.lua, json.lua     curl-based HTTP
 tome/device/kindle.lua      fb geometry, eips refresh, evdev input
 tome/device/emulator.lua    PNG output + scripted input (tests) or SDL window
+tome/device/rotation.lua    logical <-> physical canvas and touch mapping (4 orientations)
 native/tomecore.c           open/poll/read evdev, EVIOCGRAB/GABS/GBIT, fb info, clock, kill
 ```
 
@@ -51,6 +53,15 @@ byte offset into that paragraph's text. Positions survive font changes
 what plugins use to get text: `reader:text_range(from, to)`. The recap
 plugin only ever asks for text up to `reader:page_end()`, which is what makes
 it spoiler-free.
+
+## Progress and time left
+
+Each chapter's text length is measured once in a background task (a few
+chapters per UI tick) and stored with the book's state, so "%" is based on
+text, not file size. Time left = characters left ÷ reading speed. Speed is
+learned from forward page turns that took 3 s to 3 min (characters on the
+page ÷ time), blended with ~220 words/min until 10 minutes of data exist.
+Similar in spirit to KOReader's statistics plugin, but much smaller.
 
 ## Known limits
 

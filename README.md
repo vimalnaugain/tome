@@ -11,15 +11,22 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Features
 
-- EPUB 2/3 (DRM-free): table of contents, italics/bold, headings, quotes, lists
-- Justified text, 7 font sizes, line spacing, go to %, position saved per book
-- Tap right/left (or swipe, or page buttons) to turn pages, tap the top for the menu
-- Plugin API with menus, page events, background HTTP tasks ([docs/PLUGIN_API.md](docs/PLUGIN_API.md))
-- Recap plugin:
-  - **Quick recap**: the last ~15k characters you read, plus cached chapter notes
-  - **Story so far**: the whole book so far; long books are summarized chapter by chapter once and cached
-  - Offers a recap when you reopen a book after a few days
-  - Never sends text past the end of the current page
+- **Home screen**: the book you're reading (typographic cover, progress bar, % and time left,
+  current chapter, "Continue reading"), other books in progress, and your stats: books finished
+  this year (tap for the list), reading time this year, days in a row
+- **Reading**: EPUB 2/3 (DRM-free) with table of contents, italics/bold, headings, quotes, lists
+- **Display**: three typefaces (Caladea, Charter, Carlito), 7 sizes, line spacing, margins
+  (narrow/medium/wide), and portrait/landscape in both directions
+- **Progress**: a thin progress bar with chapter marks; tap it to cycle between
+  *time left in chapter · %*, *page in chapter · time left in book*, *clock · battery*, and bar only.
+  Time left is based on your own reading speed, learned as you read
+- **Library** with reading progress for every book; "Mark as finished" in the reader menu
+- **Controls**: tap right/left (or swipe, or page buttons) to turn pages, tap the top for the menu
+- **Plugins** with menus, page events and background HTTP tasks ([docs/PLUGIN_API.md](docs/PLUGIN_API.md))
+- **Recap plugin**: menu → **Recap** → *Quick* (the last pages) or *Full story* (everything so far;
+  long books are summarized chapter by chapter once and cached), or *Last one* to reread the
+  previous recap. It offers a recap when you reopen a book after a few days, and never sends text
+  past the end of the current page
 
 ## Requirements
 
@@ -53,7 +60,7 @@ This produces `build/tome-kindle.zip`.
 3. Put EPUBs in `documents/`.
 4. Eject, open KUAL → **Tome** → **Start Tome**. Wi-Fi must be on for recaps.
 
-Exit with the ✕ on the library screen (or **Exit Tome** in the reader menu).
+Leave a book with **Home** in the reader menu; exit with **Exit Tome** on the home screen.
 Logs go to `/mnt/us/tome/crash.log`.
 
 ## First run on a device
@@ -105,5 +112,6 @@ that off, or pick a cheaper model with `model = "claude-haiku-5-5"`.
 ## License
 
 Tome's code: MIT (see `LICENSE`). Bundled bitmap fonts are derived from
-Caladea and Carlito (SIL Open Font License 1.1) and DejaVu Sans (Bitstream
+Caladea and Carlito (SIL Open Font License 1.1), Bitstream Charter (Bitstream
+license; Charter is a trademark of Bitstream Inc.) and DejaVu Sans (Bitstream
 Vera license); see `fonts/LICENSE-*.txt`.

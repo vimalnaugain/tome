@@ -45,7 +45,8 @@ SDL.__index = SDL
 function SDL.new(w, h, scale)
     local lib = ffi.load("SDL2-2.0.so.0")
     assert(lib.SDL_Init(SDL_INIT_VIDEO) == 0, "SDL_Init failed")
-    local self = setmetatable({ lib = lib, w = w, h = h, scale = scale }, SDL)
+    local self = setmetatable({ lib = lib, w = w, h = h, scale = scale,
+        to_logical = function(x, y) return x, y end }, SDL)
     self.win = lib.SDL_CreateWindow("Tome", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         math.floor(w * scale), math.floor(h * scale), 0)
     self.ren = lib.SDL_CreateRenderer(self.win, -1, 0)
@@ -84,7 +85,7 @@ function SDL:poll(timeout_ms)
             elseif name then out[#out + 1] = { type = "key", key = name } end
         elseif t == MOUSEDOWN or t == MOUSEUP then
             local m = ffi.cast("SDL_MouseButtonEvent*", ev)
-            local x, y = math.floor(m.x / self.scale), math.floor(m.y / self.scale)
+            local x, y = self.to_logical(math.floor(m.x / self.scale), math.floor(m.y / self.scale))
             if t == MOUSEDOWN then
                 self.right = m.button == 3
                 self.gestures:touch_down(x, y, lib.SDL_GetTicks())
@@ -95,7 +96,7 @@ function SDL:poll(timeout_ms)
             end
         elseif t == MOUSEMOTION then
             local m = ffi.cast("SDL_MouseMotionEvent*", ev)
-            self.gestures:touch_move(math.floor(m.x / self.scale), math.floor(m.y / self.scale))
+            self.gestures:touch_move(self.to_logical(math.floor(m.x / self.scale), math.floor(m.y / self.scale)))
         end
     until lib.SDL_PollEvent(ev) == 0
     return out

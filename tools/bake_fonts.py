@@ -16,17 +16,25 @@ import zlib
 
 from PIL import Image, ImageDraw, ImageFont
 
-FONT_DIR = "/usr/share/fonts/truetype/crosextra"
+CROSEXTRA = "/usr/share/fonts/truetype/crosextra"
+TYPE1 = "/usr/share/fonts/X11/Type1"
 FACES = {
-    "serif-regular": "Caladea-Regular.ttf",
-    "serif-italic": "Caladea-Italic.ttf",
-    "serif-bold": "Caladea-Bold.ttf",
-    "serif-bolditalic": "Caladea-BoldItalic.ttf",
-    "sans-regular": "Carlito-Regular.ttf",
-    "sans-bold": "Carlito-Bold.ttf",
+    # Reading faces: serif (Caladea), charter (Bitstream Charter), sans (Carlito)
+    "serif-regular": f"{CROSEXTRA}/Caladea-Regular.ttf",
+    "serif-italic": f"{CROSEXTRA}/Caladea-Italic.ttf",
+    "serif-bold": f"{CROSEXTRA}/Caladea-Bold.ttf",
+    "serif-bolditalic": f"{CROSEXTRA}/Caladea-BoldItalic.ttf",
+    "charter-regular": f"{TYPE1}/c0648bt_.pfb",
+    "charter-italic": f"{TYPE1}/c0649bt_.pfb",
+    "charter-bold": f"{TYPE1}/c0632bt_.pfb",
+    "charter-bolditalic": f"{TYPE1}/c0633bt_.pfb",
+    "sans-regular": f"{CROSEXTRA}/Carlito-Regular.ttf",
+    "sans-italic": f"{CROSEXTRA}/Carlito-Italic.ttf",
+    "sans-bold": f"{CROSEXTRA}/Carlito-Bold.ttf",
+    "sans-bolditalic": f"{CROSEXTRA}/Carlito-BoldItalic.ttf",
 }
 SERIF_SIZES = [22, 26, 30, 34, 40, 46, 54]
-SANS_SIZES = [20, 24, 28, 34, 40, 48]
+SANS_SIZES = [20, 22, 24, 26, 28, 30, 34, 40, 46, 48, 54]
 
 RANGES = [(0x20, 0x7E), (0xA0, 0xFF), (0x100, 0x17F), (0x2010, 0x2027), (0x2030, 0x203A),
           (0x20AC, 0x20AC), (0x2122, 0x2122), (0x2190, 0x2193), (0x25B2, 0x25C0), (0x2713, 0x2713),
@@ -85,10 +93,11 @@ def bake(path, size, out_path):
 def main(out_dir):
     os.makedirs(out_dir, exist_ok=True)
     for face, file in FACES.items():
-        sizes = SERIF_SIZES if face.startswith("serif") else SANS_SIZES
+        # sans doubles as the UI face, so it gets the union of both size sets
+        sizes = SANS_SIZES if face.startswith("sans") else SERIF_SIZES
         for size in sizes:
             out = os.path.join(out_dir, f"{face}-{size}.tfnt")
-            n = bake(os.path.join(FONT_DIR, file), size, out)
+            n = bake(file, size, out)
             print(f"{out}: {n} glyphs, {os.path.getsize(out)} bytes")
 
 

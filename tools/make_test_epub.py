@@ -67,7 +67,7 @@ def xhtml(title, paras):
 """
 
 
-def main(out):
+def main(out, repeat=1):
     with zipfile.ZipFile(out, "w") as z:
         z.writestr(zipfile.ZipInfo("mimetype"), "application/epub+zip", compress_type=zipfile.ZIP_STORED)
         z.writestr("META-INF/container.xml", """<?xml version="1.0"?>
@@ -77,7 +77,7 @@ def main(out):
         manifest, spine, navli, ncx = [], [], [], []
         for i, (title, paras) in enumerate(CHAPTERS, 1):
             name = f"text/ch{i:02d}.xhtml"
-            z.writestr("OEBPS/" + name, xhtml(title, paras), compress_type=zipfile.ZIP_DEFLATED)
+            z.writestr("OEBPS/" + name, xhtml(title, paras * repeat), compress_type=zipfile.ZIP_DEFLATED)
             manifest.append(f'<item id="ch{i}" href="{name}" media-type="application/xhtml+xml"/>')
             spine.append(f'<itemref idref="ch{i}"/>')
             navli.append(f'<li><a href="{name}#top">{title}</a></li>')
@@ -104,4 +104,5 @@ def main(out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "test.epub")
+    # optional second argument: repeat each chapter's text N times (longer chapters)
+    main(sys.argv[1] if len(sys.argv) > 1 else "test.epub", int(sys.argv[2]) if len(sys.argv) > 2 else 1)

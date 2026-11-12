@@ -148,6 +148,7 @@ test("kindle evdev touch parsing", function()
     local Kindle = require("tome.device.kindle")
     local Gestures = require("tome.device.gestures")
     local k = setmetatable({ config = { touch_mirror_x = false }, width = 1072, height = 1448,
+        phys_w = 1072, phys_h = 1448, rotation = 0,
         keymap = { [104] = "next" }, gestures = Gestures.new({ tap_slop = 30 }) }, Kindle)
     -- Touch panel reports 0..4095 on both axes (like the Kindle Touch).
     local dev = { touch = true, mt = true, xmin = 0, xmax = 4095, ymin = 0, ymax = 4095, state = { x = 0, y = 0 } }
@@ -172,6 +173,52 @@ test("kindle evdev touch parsing", function()
     -- page-turn key on a key device
     k:_handle_events({ keys = true, state = {} }, { { K, 104, 1 }, { K, 104, 0 } }, 5000, out)
     eq(out[4].type, "key"); eq(out[4].key, "next"); eq(#out, 4)
+    -- landscape: a tap on the physical right edge is at the logical bottom
+    k:set_rotation(90)
+    eq(k.width, 1448); eq(k.height, 1072)
+    k:_handle_events(dev, frame({ A, core.ABS_MT_TRACKING_ID, 9 }, { A, core.ABS_MT_POSITION_X, 4095 }, { A, core.ABS_MT_POSITION_Y, 0 }), 6000, out)
+    k:_handle_events(dev, frame({ A, core.ABS_MT_TRACKING_ID, -1 }), 6100, out)
+    eq(out[5].x, 0); eq(out[5].y, 0)
+end)
+
+test("rotation maps canvas and touches consistently", function()
+    local R = require("tome.device.rotation")
+    local Canvas = require("tome.canvas")
+    local pw, ph = 6, 4
+    for _, r in ipairs({ 0, 90, 180, 270 }) do
+        local lw, lh = R.dims(pw, ph, r)
+        local c = Canvas.new(lw, lh)
+        for i = 0, lw * lh - 1 do c.buf[i] = i % 251 end
+        local phys = R.to_physical_canvas(c, pw, ph, r)
+        for py = 0, ph - 1 do
+            for px = 0, pw - 1 do
+                local lx, ly = R.to_logical(px, py, pw, ph, r)
+                eq(phys.buf[py * pw + px], c.buf[ly * lw + lx], "r=" .. r)
+                local bx, by = R.to_physical(lx, ly, pw, ph, r)
+                eq(bx, px); eq(by, py)
+            end
+        end
+    end
+end)
+
+test("reading stats, speed and time left", function()
+    local Stats = require("tome.stats")
+    local s = Stats.open(tmp .. "/stats_test.lua")
+    eq(math.floor(s:chars_per_minute()), 1100)
+    for _ = 1, 40 do s:record("b1", 30, 1000) end   -- 2000 chars/min for 20 min
+    assert(math.abs(s:chars_per_minute() - 2000) < 1, "learned speed " .. s:chars_per_minute())
+    s:record("b1", 5000, 1000)                      -- away from the device: ignored
+    eq(s.data.books.b1.seconds, 40 * 30)
+    s:set_finished("b1", true)
+    eq(s:year().finished, 1); eq(s:year().seconds, 1200)
+    eq(s:streak_days(), 1)
+    eq(Stats.format_duration(20), "less than a minute")
+    eq(Stats.format_duration(3 * 3600 + 5 * 60), "3 h 05 min")
+    -- reader exposes time left consistent with remaining text
+    reader:go_to({ chapter = 1, block = 1, offset = 0 })
+    local ch_left, book_left = reader:time_left()
+    assert(ch_left >= 0 and book_left > ch_left, "book time left should exceed chapter time left")
+    eq(math.floor(reader:position().percent), 0)
 end)
 
 app.reader:close()

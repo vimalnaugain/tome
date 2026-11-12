@@ -1,11 +1,8 @@
 --[[
 Story recap plugin: "where was I?" for books you put down a while ago.
 
-Reader menu:
-  Recap ▶  Quick recap (recent pages)
-           Story so far
-           Show last recap
-           Provider / Length / Clear cached chapter notes
+Reader menu → Recap opens a dialog: [Last one] [Quick] [Full story].
+Provider, model and length are set in config.lua.
 
 Configure providers and keys in config.lua (see config.example.lua).
 --]]
@@ -110,39 +107,24 @@ function RecapPlugin:show_last(reader)
     self.app:show_text({ title = last.title .. " (saved)", text = last.text })
 end
 
+--- One "Recap" entry; it opens a small dialog with the choices.
 function RecapPlugin:addToReaderMenu(items, reader)
-    local plugin = self
-    local settings_items = function()
-        local list = {}
-        for _, name in ipairs(self.Providers.names()) do
-            local p = self.Providers.get(name)
-            list[#list + 1] = { text = "Provider: " .. (p and p.name or name),
-                checked = function()
-                    local cur = plugin.settings:get("provider") or self.Providers.names()[1]
-                    return cur == name
-                end,
-                callback = function() plugin.settings:set("provider", name); plugin.settings:save() end }
-        end
-        for _, len in ipairs({ "short", "medium", "long" }) do
-            list[#list + 1] = { text = "Length: " .. len,
-                checked = function() return plugin.settings:get("length", "medium") == len end,
-                callback = function() plugin.settings:set("length", len); plugin.settings:save() end }
-        end
-        list[#list + 1] = { text = "Clear cached chapter notes", callback = function()
-            local provider = plugin:_provider()
-            if provider then plugin.Recap.new({ reader = reader, provider = provider }):clear_cache() end
-            plugin.app:notify("Chapter notes cleared for this book.")
-        end }
-        return list
-    end
-    table.insert(items, 2, { text = "Recap", submenu = function()
-        return {
-            { text = "Quick recap (recent pages)", callback = function() plugin:run(reader, "quick") end },
-            { text = "Story so far", callback = function() plugin:story_so_far(reader) end },
-            { text = "Show last recap", callback = function() plugin:show_last(reader) end },
-            { text = "Recap settings", submenu = settings_items },
-        }
-    end })
+    table.insert(items, 2, { text = "Recap", callback = function() self:show_dialog(reader) end })
+end
+
+function RecapPlugin:show_dialog(reader)
+    local W = require("tome.ui.widgets")
+    local has_last = util.file_exists(self:_last_recap_path(reader))
+    local buttons = {
+        { text = "Quick", callback = function() self:run(reader, "quick") end },
+        { text = "Full story", primary = true, callback = function() self:story_so_far(reader) end },
+    }
+    if has_last then table.insert(buttons, 1, { text = "Last one", callback = function() self:show_last(reader) end }) end
+    self.app.ui:show(W.Dialog.new({
+        title = "Recap",
+        text = "A spoiler-free reminder of the story up to this page.\n\nQuick covers the last few pages. Full story covers everything so far.",
+        buttons = buttons,
+    }))
 end
 
 --- Offer a recap when a book is reopened after a break.

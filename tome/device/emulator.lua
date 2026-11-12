@@ -11,6 +11,7 @@ Desktop emulator. Two input modes:
 local ok_core, core = pcall(require, "tomecore")
 local util = require("tome.util")
 local log = require("tome.log")
+local Rotation = require("tome.device.rotation")
 
 local Emu = { name = "emulator", is_kindle = false }
 Emu.__index = Emu
@@ -27,15 +28,17 @@ end
 function Emu.new(config)
     local c = config or {}
     local self = setmetatable({ config = c }, Emu)
-    self.width = c.screen_width or 1072
-    self.height = c.screen_height or 1448
+    self.phys_w = c.screen_width or 1072
+    self.phys_h = c.screen_height or 1448
+    self.width, self.height, self.rotation = self.phys_w, self.phys_h, 0
     self.dpi = c.dpi or 300
     self.out_dir = c.out_dir or "emu_out"
     util.mkdir_p(self.out_dir)
     self.refresh_count = 0
     self.mode = c.input or "script"
     if self.mode == "sdl" then
-        self.sdl = require("tome.device.sdl").new(self.width, self.height, c.sdl_scale or 0.5)
+        self.sdl = require("tome.device.sdl").new(self.phys_w, self.phys_h, c.sdl_scale or 0.5)
+        self.sdl.to_logical = function(x, y) return Rotation.to_logical(x, y, self.phys_w, self.phys_h, self.rotation) end
     else
         local src = c.script and io.open(c.script, "r") or io.stdin
         self.script = src
@@ -46,7 +49,14 @@ end
 function Emu:monotonic_ms() return now_ms() end
 function Emu:sleep_ms(ms) sleep_ms(ms) end
 
+function Emu:set_rotation(r)
+    self.rotation = Rotation.normalize(r)
+    self.width, self.height = Rotation.dims(self.phys_w, self.phys_h, self.rotation)
+end
+
+--- What the panel shows (physical layout), for screenshots.
 function Emu:refresh(canvas, mode)
+    canvas = Rotation.to_physical_canvas(canvas, self.phys_w, self.phys_h, self.rotation)
     self.canvas = canvas
     self.refresh_count = self.refresh_count + 1
     if self.sdl then
@@ -90,8 +100,11 @@ function Emu:poll(timeout_ms)
     local op = cmd[1]
     log.info("script:", table.concat(cmd, " "))
     if op == "tap" or op == "hold" then
-        return { { type = op, x = tonumber(cmd[2]), y = tonumber(cmd[3]) } }
+        -- script coordinates are physical (as on the panel), like real touches
+        local x, y = Rotation.to_logical(tonumber(cmd[2]), tonumber(cmd[3]), self.phys_w, self.phys_h, self.rotation)
+        return { { type = op, x = x, y = y } }
     elseif op == "swipe" then
+        -- direction is as seen by the reader
         return { { type = "swipe", dir = cmd[2], x = self.width / 2, y = self.height / 2 } }
     elseif op == "key" then
         return { { type = "key", key = cmd[2] } }

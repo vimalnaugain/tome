@@ -28,6 +28,21 @@ function UI.new(device)
     return self
 end
 
+--- Change orientation: new canvas size, theme recomputed, views re-layout.
+function UI:set_rotation(r)
+    if not self.device.set_rotation then return end
+    self.device:set_rotation(r)
+    self.canvas = Canvas.new(self.device.width, self.device.height)
+    self.theme = nil
+    for _, v in ipairs(self.stack) do
+        if v.on_resize then
+            local ok, err = pcall(v.on_resize, v)
+            if not ok then log.error("resize failed:", err) end
+        end
+    end
+    self:set_dirty("full")
+end
+
 function UI:show(view)
     self.stack[#self.stack + 1] = view
     view.ui = self

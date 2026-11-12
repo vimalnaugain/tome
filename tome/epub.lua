@@ -193,6 +193,15 @@ function Epub:trim_cache(keep)
     end
 end
 
+--- Characters from the start of the position's chapter to the position.
+function Epub:chars_into_chapter(pos)
+    local c = self:chapter(pos.chapter)
+    if not c then return 0 end
+    local b = c.blocks[pos.block]
+    if not b then return c.length end
+    return math.min(c.length, b.start + (pos.offset or 0))
+end
+
 --- Fraction of the book (0..1) at a position, using spine byte sizes as weights.
 function Epub:progress(pos)
     local ch = self.chapters[pos.chapter]
