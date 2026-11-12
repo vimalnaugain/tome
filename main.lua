@@ -3,6 +3,9 @@ Tome entry point.
 
   Kindle:   ./tome main.lua                       (via platform/kindle/tome.sh)
   Desktop:  luajit main.lua [--emulator] [--script FILE] [--sdl] [book.epub]
+
+  --home DIR   where config.lua and data/ live (default: next to main.lua).
+               The KPM package uses /mnt/us/tome, so upgrades keep your data.
 --]]
 local root = arg and arg[0] and arg[0]:match("^(.*)/[^/]*$") or "."
 package.path = root .. "/?.lua;" .. package.path
@@ -23,17 +26,20 @@ while arg and i <= #arg do
     elseif a == "--sdl" then emu.input = "sdl"; opts.device = "emulator"
     elseif a == "--out" then i = i + 1; emu.out_dir = arg[i]
     elseif a == "--config" then i = i + 1; opts.config_path = arg[i]
+    elseif a == "--home" then i = i + 1; opts.home = arg[i]
     elseif a == "--debug" then log.set_level("debug")
     else book = a end
     i = i + 1
 end
 
-local config_path = opts.config_path or (root .. "/config.lua")
+local home = opts.home or os.getenv("TOME_HOME") or root
+local config_path = opts.config_path or (home .. "/config.lua")
 local config = util.load_table(config_path)
 if not config and util.file_exists(config_path) then
     log.error("config.lua has a syntax error; using defaults")
 end
 config = config or {}
+config.data_dir = config.data_dir or (home .. "/data")
 config.emulator = config.emulator or {}
 for k, v in pairs(emu) do config.emulator[k] = v end
 opts.config = config

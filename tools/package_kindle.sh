@@ -10,11 +10,11 @@ BIN="${ROOT}/build/kindle/tome"
 
 rm -rf "${OUT}"
 mkdir -p "${OUT}/tome" "${OUT}/extensions"
-cp "${BIN}" "${OUT}/tome/tome"
+cp "${BIN}" "${OUT}/tome/tome-luajit"
 cp "${ROOT}/main.lua" "${ROOT}/platform/kindle/tome.sh" "${OUT}/tome/"
 cp -r "${ROOT}/tome" "${ROOT}/fonts" "${ROOT}/plugins" "${OUT}/tome/"
 cp "${ROOT}/config.example.lua" "${OUT}/tome/config.example.lua"
 cp -r "${ROOT}/platform/kindle/extensions/tome" "${OUT}/extensions/"
-chmod +x "${OUT}/tome/tome" "${OUT}/tome/tome.sh"
+chmod +x "${OUT}/tome/tome-luajit" "${OUT}/tome/tome.sh"
 (cd "${OUT}" && zip -qr ../tome-kindle.zip tome extensions)
 echo "wrote ${ROOT}/build/tome-kindle.zip"

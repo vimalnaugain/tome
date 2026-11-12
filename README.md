@@ -56,7 +56,24 @@ tools/package_kindle.sh
 
 This produces `build/tome-kindle.zip`.
 
-## Install
+## Install with KPM (no KUAL needed)
+
+If your Kindle has the Kindle Package Manager (KPM, included with current
+jailbreaks), Tome installs like KOReader once its repository is added.
+
+1. Publish `build/kpm-repo/` (from `tools/package_kpm.sh`) somewhere public,
+   for example GitHub Pages. Its `manifest.json` URL is the repository address.
+2. Add the repository once. The Kindle search bar refuses `.` and `:`, so do
+   this in a terminal: type `;kpm install kterm` in the search bar, open kterm, and run
+   `kpm add-repo https://<your-site>/manifest.json` then `kpm update`.
+3. From then on, type `;kpm install tome` in the search bar (and `;kpm upgrade` for updates).
+4. Open **Tome** from your Kindle library. Settings, API keys and reading data
+   live in `/mnt/us/tome/`, which upgrades and uninstalls leave alone.
+
+Without a repository, copy the `.kpkg` to the Kindle and run
+`kpm install file:///mnt/us/tome_0.2.0_kindlepw2-kindlehf.kpkg` in kterm.
+
+## Install over USB (with KUAL)
 
 1. Connect the Kindle over USB and unzip `tome-kindle.zip` at the root of the
    drive, so you get `/mnt/us/tome/` and `/mnt/us/extensions/tome/`.

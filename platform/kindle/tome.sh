@@ -6,7 +6,11 @@
 #   tome.sh --framework_stop   stop the whole Kindle framework (more RAM, slower exit)
 
 TOME_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG="${TOME_DIR}/crash.log"
+# Settings, keys and reading data. Defaults to the app folder (USB install);
+# the KPM package sets TOME_HOME=/mnt/us/tome so upgrades never touch it.
+TOME_HOME="${TOME_HOME:-${TOME_DIR}}"
+mkdir -p "${TOME_HOME}"
+LOG="${TOME_HOME}/crash.log"
 STOP_FRAMEWORK="no"
 [ "$1" = "--framework_stop" ] && STOP_FRAMEWORK="yes"
 
@@ -45,7 +49,7 @@ killall -STOP volumd 2>/dev/null && VOLUMD_STOPPED=yes
 
 cd "${TOME_DIR}" || exit 1
 log "starting"
-./tome main.lua --kindle >> "${LOG}" 2>&1
+./tome-luajit main.lua --kindle --home "${TOME_HOME}" >> "${LOG}" 2>&1
 RC=$?
 log "exited with ${RC}"
 

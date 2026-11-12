@@ -1,0 +1,12 @@
+{
+	"items": [
+	{
+		"name": "Tome",
+		"priority": 0,
+		"items": [
+		{ "name": "Start Tome", "priority": 1, "action": "/var/local/kmc/bin/kpm", "params": "launch tome", "status": false, "exitmenu": true },
+		{ "name": "Start Tome (stop framework)", "priority": 2, "action": "/var/local/kmc/bin/kpm", "params": "launch tome --framework_stop", "status": false, "exitmenu": true }
+		]
+	}
+	]
+}
