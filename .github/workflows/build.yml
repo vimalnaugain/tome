@@ -25,12 +25,14 @@ jobs:
       - name: Install LuaJIT and Pillow
         run: |
           sudo apt-get update
-          sudo apt-get install -y luajit libluajit-5.1-dev
+          sudo apt-get install -y luajit libluajit-5.1-dev lua-cjson
           python3 -m pip install pillow
       - name: Build desktop C module
         run: make -C native
       - name: Run tests
         run: luajit tests/run_tests.lua
+      - name: Run KOReader recap plugin tests
+        run: luajit koreader/tests/run_tests.lua
 
   build:
     needs: test
@@ -58,12 +60,15 @@ jobs:
           VERSION="0.2.${{ github.run_number }}" tools/package_kpm.sh
           tools/package_kindle.sh
           cp build/tome-kindle.zip build/kpm-repo/
+          tools/package_koreader.sh
+          cp build/recap.koplugin.zip build/kpm-repo/
       - uses: actions/upload-artifact@v4
         with:
           name: tome-kindle
           path: |
             build/kpm/*.kpkg
             build/tome-kindle.zip
+            build/recap.koplugin.zip
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/kpm-repo

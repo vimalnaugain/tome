@@ -33,6 +33,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
   previous recap. It offers a recap when you reopen a book after a few days, and never sends text
   past the end of the current page
 
+The recap plugin is also available for **KOReader**: see [koreader/README.md](koreader/README.md).
+
 ## Requirements
 
 - A jailbroken Kindle with KUAL, firmware 5.x, touchscreen (Paperwhite, Oasis, Basic, Voyage, Scribe…)
