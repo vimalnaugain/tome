@@ -34,14 +34,15 @@ end
 function Home:on_show() self:refresh() end
 
 -- Typographic "cover": title and author set in a framed tile.
-local function draw_cover(c, x, y, w, h, title, author, border)
+local function draw_cover(c, x, y, w, h, title, author, border, dpi)
+    local k = dpi / 300 -- font sizes below are for a 300 dpi screen
     c:fill_rect(x, y, w, h, 238)
     c:rect(x, y, w, h, 0, border)
     c:rect(x + border * 3, y + border * 3, w - border * 6, h - border * 6, 120, 1)
     local inner = w - border * 14
     local font, lines
     for _, px in ipairs({ 34, 30, 26, 22 }) do
-        font = Font.get("serif", "b", px)
+        font = Font.get("serif", "b", math.floor(px * k))
         lines = W.wrap(font, title or "", inner)
         if #lines <= 5 then break end
     end
@@ -52,7 +53,7 @@ local function draw_cover(c, x, y, w, h, title, author, border)
         ty = ty + font.line_height
     end
     if author and author ~= "" then
-        local f = Font.get("serif", "i", 22)
+        local f = Font.get("serif", "i", math.floor(22 * k))
         local a = W.fit(f, author, inner)
         c:text(f, a, x + (w - f:width(a)) / 2, y + h - border * 8, 60)
     end
@@ -110,16 +111,16 @@ function Home:draw(c)
     local sy = bottom_y - stats_h
     local y2 = label("Your reading", sy)
     local tiles = {
-        { tostring(year.finished), (year.finished == 1 and "book" or "books") .. " finished in " .. os.date("%Y"),
+        { tostring(year.finished), "finished in " .. os.date("%Y"),
             function() self:show_finished() end },
-        { Stats.format_duration(year.seconds, true), "reading this year" },
+        { Stats.format_duration(year.seconds, true), "read this year" },
         { tostring(stats:streak_days()), stats:streak_days() == 1 and "day in a row" or "days in a row" },
     }
     local tw = math.floor((w - 2 * mx) / #tiles)
     for i, tile in ipairs(tiles) do
         local tx = mx + (i - 1) * tw
         c:text(big, tile[1], tx, y2 + big.ascent)
-        c:text(t.small, tile[2], tx, y2 + big.line_height + t.small.ascent, 90)
+        c:text(t.small, W.fit(t.small, tile[2], tw - pad), tx, y2 + big.line_height + t.small.ascent, 90)
         if tile[3] then
             self.targets[#self.targets + 1] = { x = tx, y = sy, w = tw, h = stats_h, action = tile[3] }
         end
@@ -140,7 +141,7 @@ function Home:draw(c)
     local avail = sy - y - pad * 2
     local cover_w = math.floor(math.min(w * 0.3, avail / 1.5))
     local cover_h = math.floor(cover_w * 1.5)
-    draw_cover(c, mx, y, cover_w, cover_h, cur.title, authors_of(cur), t.border)
+    draw_cover(c, mx, y, cover_w, cover_h, cur.title, authors_of(cur), t.border, app.device.dpi)
     local tx = mx + cover_w + pad * 2
     local text_w = w - tx - mx
     local tf = Font.get("serif", "b", math.floor(app.device.dpi * 0.13))
