@@ -7,7 +7,7 @@ if [ -f "${SCRIPTLET}" ] && grep -q '^# tome-managed-scriptlet-v1$' "${SCRIPTLET
     rm -f "${SCRIPTLET}"
 fi
 rm -f "${ROOT}/tome-icon.png"
-if [ -f "${ROOT}/extensions/tome/menu.json" ] && grep -q '"launch tome' "${ROOT}/extensions/tome/menu.json"; then
+if [ -f "${ROOT}/extensions/tome/menu.json" ] && grep -q 'packages/tome/launch.sh' "${ROOT}/extensions/tome/menu.json"; then
     rm -rf "${ROOT}/extensions/tome"
 fi
 echo "Tome removed. Your settings and reading data are still in ${ROOT}/tome."
