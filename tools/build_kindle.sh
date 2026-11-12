@@ -53,7 +53,7 @@ make -C "${BUILD}/luajit/src" -j"$(nproc 2>/dev/null || echo 4)" \
 "${BUILD}/bin/target-cc" -O2 -static \
     -I"${BUILD}/luajit/src" \
     "${ROOT}/native/tome_main.c" "${ROOT}/native/tomecore.c" "${ROOT}/native/arm_rt.c" \
-    "${BUILD}/luajit/src/libluajit.a" -lm \
+    "${BUILD}/luajit/src/libluajit.a" -lm -s \
     -o "${BUILD}/tome"
 
 echo "built ${BUILD}/tome"

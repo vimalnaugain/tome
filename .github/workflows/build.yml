@@ -49,6 +49,10 @@ jobs:
           file build/kindle/tome
           file build/kindle/tome | grep -q "ARM"
           file build/kindle/tome | grep -q "statically linked"
+      - name: Run Tome's core on the ARM binary (qemu)
+        run: |
+          sudo apt-get install -y qemu-user
+          qemu-arm build/kindle/tome tests/arm_smoke.lua
       - name: Package (KPM and USB zip)
         run: |
           VERSION="0.2.${{ github.run_number }}" tools/package_kpm.sh
