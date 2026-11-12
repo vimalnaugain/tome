@@ -58,8 +58,9 @@ with tarfile.open(out, "w:gz", compresslevel=6) as tar:
     for item in sorted(os.listdir(stage)):
         tar.add(os.path.join(stage, item), arcname=item, filter=exe_filter)
 
-# Repository folder in KPM's layout
+# Repository folder in KPM's layout (rebuilt from scratch: latest version only)
 repo = os.path.join(root, "build", "kpm-repo")
+shutil.rmtree(repo, ignore_errors=True)
 art_rel = f"packages/tome/artifacts/{name}"
 os.makedirs(os.path.join(repo, os.path.dirname(art_rel)), exist_ok=True)
 shutil.copy(out, os.path.join(repo, art_rel))
@@ -84,6 +85,19 @@ repo_manifest = {
 }
 with open(os.path.join(repo, "manifest.json"), "w") as f:
     json.dump(repo_manifest, f, indent=2)
+with open(os.path.join(repo, "index.html"), "w") as f:
+    f.write(f"""<!doctype html><meta charset="utf-8"><title>Tome KPM repository</title>
+<style>body{{font:16px/1.5 Georgia,serif;max-width:40em;margin:2em auto;padding:0 1em}}code{{background:#eee;padding:.1em .3em}}</style>
+<h1>Tome</h1>
+<p>{manifest["description"]}. Version {version}.</p>
+<h2>Install with KPM</h2>
+<ol>
+<li>Search bar: <code>;kpm install kterm</code>, then open kterm.</li>
+<li>In kterm: <code>kpm add-repo &lt;this page's address&gt;manifest.json</code> then <code>kpm update</code> (once).</li>
+<li>Search bar: <code>;kpm install tome</code>. Later: <code>;kpm upgrade</code>.</li>
+</ol>
+<p>Files: <a href="manifest.json">manifest.json</a> &middot; <a href="{art_rel}">{name}</a> &middot; <a href="tome-kindle.zip">tome-kindle.zip</a> (USB install with KUAL)</p>
+""")
 print("package:", out)
 print("repository:", repo)
 PY
