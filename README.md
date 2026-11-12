@@ -58,6 +58,16 @@ tools/package_kindle.sh
 
 This produces `build/tome-kindle.zip`.
 
+## Updating Tome
+
+- **Over Wi-Fi:** Settings → **Check for updates**. Tome downloads the new version,
+  checks its SHA-256 checksum, and restarts into it.
+- **Over USB:** download `tome-latest.kpkg` from the Tome page, copy it into the
+  `tome/update` folder on the Kindle, eject, and open Tome. It installs itself first.
+- **With KPM:** `kpm -y install tome` in kterm still works.
+
+Settings, keys, reading progress and books are never touched by updates.
+
 ## Set up AI recaps from your phone
 
 On the home screen tap **Settings → AI recap: set up from phone**. Scan the QR

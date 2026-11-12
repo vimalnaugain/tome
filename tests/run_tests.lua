@@ -320,6 +320,38 @@ test("phone setup: page, wrong code, save, key stored securely and verified", fu
     os.execute("kill $(cat " .. tmp .. "/mock.pid) 2>/dev/null")
 end)
 
+test("in-app updater: version check, verified download, tampered file rejected", function()
+    local util = require("tome.util")
+    local Updater = require("tome.updater")
+    assert(Updater.newer("0.2.10", "0.2.9") and not Updater.newer("0.2.9", "0.2.10"))
+    assert(not Updater.newer("0.2.5", "0.2.5") and Updater.newer("1.0.0", "dev"))
+    -- a fake update site
+    local site = tmp .. "/site"
+    os.execute("mkdir -p " .. site)
+    local pkg = "fake package bytes " .. string.rep("x", 5000)
+    util.write_file(site .. "/tome-latest.kpkg", pkg)
+    local sum = io.popen("sha256sum " .. site .. "/tome-latest.kpkg"):read("*l"):match("^(%x+)")
+    util.write_file(site .. "/latest.json", app.json.encode({ version = "9.9.9", file = "tome-latest.kpkg", sha256 = sum, size = #pkg }))
+    os.execute("cd " .. site .. " && python3 -m http.server 18793 --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > " .. tmp .. "/site.pid")
+    os.execute("sleep 1")
+    app.config.update_url = "http://127.0.0.1:18793/latest.json"
+    app.home_dir = tmp .. "/home"
+    local info = assert(Updater.check(app))
+    eq(info.version, "9.9.9")
+    assert(Updater.newer(info.version, app.version))
+    local path = assert(Updater.download(app, info))
+    eq(util.read_file(path), pkg)
+    eq(path, tmp .. "/home/update/tome-update.kpkg")
+    -- tampered: checksum doesn't match, nothing is left for the launcher
+    os.remove(path)
+    info.sha256 = string.rep("0", 64)
+    local bad, err = Updater.download(app, info)
+    assert(not bad and err:find("checksum"), tostring(err))
+    assert(not util.file_exists(tmp .. "/home/update/tome-update.kpkg"))
+    os.execute("kill $(cat " .. tmp .. "/site.pid) 2>/dev/null")
+    app.config.update_url = nil
+end)
+
 test("image decoders match PIL (baseline, progressive, PNG)", function()
     local Image = require("tome.image")
     local ffi = require("ffi")

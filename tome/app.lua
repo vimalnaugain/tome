@@ -20,6 +20,10 @@ App.__index = App
 function App.new(opts)
     local self = setmetatable({}, App)
     self.root = opts.root or "."
+    -- where config.lua, data/ and update/ live (TOME_HOME)
+    self.home_dir = opts.home or self.root
+    local v = util.read_file(self.root .. "/VERSION")
+    self.version = v and util.trim(v) or "dev"
     self.config = opts.config or {}
     local cfg = self.config
     Font.set_dir(self.root .. "/fonts")
@@ -220,6 +224,8 @@ function App:show_settings()
                     self:set_rotation(r); view:set_items(build())
                 end })
             end }
+        items[#items + 1] = { text = "Check for updates", subtext = "Version " .. self.version,
+            callback = function() require("tome.updater").run(self) end }
         items[#items + 1] = { text = "Auto sleep", subtext = string.format("After %d idle minutes",
             self.settings.sleep_after_minutes or self.config.sleep_after_minutes or 10), callback = function()
             local opts = {}
@@ -257,7 +263,8 @@ function App:confirm_quit()
         on_ok = function() self:quit() end })
 end
 
-function App:quit()
+function App:quit(exit_code)
+    self.exit_code = exit_code
     self.ui:quit()
 end
 

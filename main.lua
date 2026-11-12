@@ -46,7 +46,9 @@ opts.config = config
 if config.log_level then log.set_level(config.log_level) end
 if config.log_file then log.set_file(config.log_file) end
 
+opts.home = home
 local App = require("tome.app")
 local app = App.new(opts)
 local ok = app:run(book)
-os.exit(ok and 0 or 1)
+-- 85 asks the launcher to install a downloaded update and restart Tome
+os.exit(app.exit_code or (ok and 0 or 1))

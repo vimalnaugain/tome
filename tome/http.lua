@@ -60,7 +60,7 @@ function Http:request(req)
         "max-time = " .. tostring(req.timeout or 120),
         "connect-timeout = 20",
         "user-agent = " .. cfg_quote(self.user_agent),
-        "output = " .. cfg_quote(files.out),
+        "output = " .. cfg_quote(req.output_file or files.out),
         "write-out = " .. cfg_quote("%{http_code}"),
     }
     if self.ca_bundle then lines[#lines + 1] = "cacert = " .. cfg_quote(self.ca_bundle) end
@@ -106,7 +106,8 @@ function Http:request(req)
     end
     local exit = tonumber((util.read_file(files.done) or ""):match("%d+") or "")
     local status = tonumber((util.read_file(files.code) or ""):match("%d+") or "") or 0
-    local out = util.read_file(files.out) or ""
+    -- with output_file the body stays on disk (large downloads)
+    local out = req.output_file and "" or (util.read_file(files.out) or "")
     local err = trim_or_nil(util.read_file(files.err))
     cleanup()
     if exit and exit ~= 0 then

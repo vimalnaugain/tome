@@ -42,6 +42,8 @@ manifest = {
 }
 with open(os.path.join(stage, "manifest.json"), "w") as f:
     json.dump(manifest, f, indent=2)
+with open(os.path.join(stage, "VERSION"), "w") as f:
+    f.write(version + "\n")
 
 name = f"tome_{version}_{'-'.join(platforms)}.kpkg"
 out = os.path.join(root, "build", "kpm", name)
@@ -85,6 +87,15 @@ repo_manifest = {
 }
 with open(os.path.join(repo, "manifest.json"), "w") as f:
     json.dump(repo_manifest, f, indent=2)
+
+# Fixed-name copy for USB updates, and latest.json for the in-app updater
+import hashlib
+shutil.copy(out, os.path.join(repo, "tome-latest.kpkg"))
+with open(out, "rb") as f:
+    digest = hashlib.sha256(f.read()).hexdigest()
+with open(os.path.join(repo, "latest.json"), "w") as f:
+    json.dump({"version": version, "file": "tome-latest.kpkg", "sha256": digest,
+               "size": os.path.getsize(out)}, f, indent=2)
 with open(os.path.join(repo, "index.html"), "w") as f:
     f.write(f"""<!doctype html><meta charset="utf-8"><title>Tome KPM repository</title>
 <style>body{{font:16px/1.5 Georgia,serif;max-width:40em;margin:2em auto;padding:0 1em}}code{{background:#eee;padding:.1em .3em}}</style>
@@ -96,6 +107,9 @@ with open(os.path.join(repo, "index.html"), "w") as f:
 <li>In kterm: <code>kpm add-repo &lt;this page's address&gt;manifest.json</code> then <code>kpm update</code> (once).</li>
 <li>Search bar: <code>;kpm install tome</code>. Later: <code>;kpm upgrade</code>.</li>
 </ol>
+<h2>Update over USB</h2>
+<p>Download <a href="tome-latest.kpkg">tome-latest.kpkg</a>, copy it into the <code>tome/update</code>
+folder on your Kindle, eject, and open Tome. Or use <b>Settings &gt; Check for updates</b> in Tome.</p>
 <p>Files: <a href="manifest.json">manifest.json</a> &middot; <a href="{art_rel}">{name}</a> &middot; <a href="tome-kindle.zip">tome-kindle.zip</a> (USB install with KUAL)</p>
 """)
 print("package:", out)
