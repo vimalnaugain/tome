@@ -226,6 +226,19 @@ test("reading stats, speed and time left", function()
     eq(math.floor(reader:position().percent), 0)
 end)
 
+test("API key files with editor junk are cleaned", function()
+    local P = app.plugins.by_name.recap.Providers
+    local key = "AIzaSyD-EXAMPLEexample_1234567890abcde"
+    for name, raw in pairs({
+        plain = key, crlf = key .. "\r\n", bom = "\239\187\191" .. key .. "\n",
+        rtf = "{\\rtf1\\ansi\n{\\fonttbl\\f0 Helvetica;}\n\\f0\\fs24 \\cf0 " .. key .. "}",
+        quoted = '"' .. key .. '"', assign = "GEMINI_API_KEY=" .. key,
+    }) do
+        eq(P.clean_key(raw), key, name)
+    end
+    eq(P.clean_key(" sk-ant-api03-abcDEF_123-xyz456789012345 \n"), "sk-ant-api03-abcDEF_123-xyz456789012345")
+end)
+
 test("image decoders match PIL (baseline, progressive, PNG)", function()
     local Image = require("tome.image")
     local ffi = require("ffi")

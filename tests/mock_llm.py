@@ -27,9 +27,25 @@ def recap_for(prompt):
             f"(mock: prompt was {len(prompt)} characters)")
 
 
+GEMINI_MODELS = ["models/gemini-2.5-flash", "models/gemini-3.8-flash", "models/gemini-3.8-flash-lite",
+                 "models/gemini-3.8-pro", "models/gemini-3.9-flash-preview", "models/text-embedding-004"]
+
+
+def gemini_error(handler, code, message, status="INVALID_ARGUMENT"):
+    # Gemini's OpenAI-compatible endpoint wraps errors in a list
+    handler.reply(code, [{"error": {"code": code, "message": message, "status": status}}])
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
+
+    def do_GET(self):
+        if self.path.endswith("/models"):
+            if self.headers.get("authorization") != "Bearer test-key":
+                return gemini_error(self, 400, "API key not valid. Please pass a valid API key.")
+            return self.reply(200, {"object": "list", "data": [{"id": m, "object": "model"} for m in GEMINI_MODELS]})
+        self.reply(404, {"error": {"message": "not found"}})
 
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("content-length", 0)))
@@ -46,6 +62,11 @@ class Handler(BaseHTTPRequestHandler):
                    "stop_reason": "end_turn", "usage": {"input_tokens": len(prompt) // 4, "output_tokens": 100}}
             return self.reply(200, out)
         if self.path.endswith("/chat/completions"):
+            if "gemini" in self.path or self.path.startswith("/gemini"):
+                if self.headers.get("authorization") != "Bearer test-key":
+                    return gemini_error(self, 400, "API key not valid. Please pass a valid API key.")
+                if "models/" + req["model"] not in GEMINI_MODELS:
+                    return gemini_error(self, 404, f"models/{req['model']} is not found for API version v1beta", "NOT_FOUND")
             prompt = req["messages"][-1]["content"]
             return self.reply(200, {"choices": [{"message": {"role": "assistant", "content": recap_for(prompt)}}]})
         self.reply(404, {"error": {"message": "not found"}})

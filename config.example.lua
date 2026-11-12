@@ -45,6 +45,10 @@ return {
                     model = "claude-opus-5-5",
                     -- effort = "medium",
                 },
+                -- Google Gemini (free tier). model = "auto" picks the newest Flash model
+                -- your key can use; put the key in /mnt/us/tome/gemini.key.
+                -- gemini = { type = "openai", base_url = "https://generativelanguage.googleapis.com/v1beta/openai",
+                --            api_key_file = "/mnt/us/tome/gemini.key", model = "auto" },
                 -- Any OpenAI-compatible endpoint:
                 -- openai = { type = "openai", base_url = "https://api.openai.com/v1",
                 --            api_key_file = "/mnt/us/tome/openai.key", model = "your-model" },
