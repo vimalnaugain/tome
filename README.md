@@ -15,8 +15,6 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
   current chapter, "Continue reading"), other books in progress, and your stats: books finished
   this year (tap for the list), reading time this year, days in a row
 - **Reading**: EPUB 2/3 (DRM-free) with table of contents, italics/bold, headings, quotes, lists
-- **Display**: three typefaces (Caladea, Charter, Carlito), 7 sizes, line spacing, margins
-  (narrow/medium/wide), and portrait/landscape in both directions
 - **Progress**: a thin progress bar with chapter marks; tap it to cycle between
   *time left in chapter · %*, *page in chapter · time left in book*, *clock · battery*, and bar only.
   Time left is based on your own reading speed, learned as you read
@@ -25,7 +23,11 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Sleep screen**: press the power button (or leave the Kindle idle for 10 minutes) and the cover
   of the book you're reading fills the screen, like the Kindle's "show book cover" option. On Kindles
   with ads ("Special Offers"), the Kindle draws its ad there instead
-- **Library** with titles, authors, covers and reading progress; "Mark as finished" in the reader menu
+- **Library** like the Kindle's: every EPUB on the device in a cover grid, no folders to browse.
+  Filter All / Reading / Finished / New, sort by Recent / Title / Author, hold a cover for details
+- **Display panel (Aa)**: font (Caladea, Literata, Charter, Merriweather, Bitter, Atkinson Hyperlegible,
+  Carlito), size, text weight, line spacing, margins, orientation, brightness, warm light and
+  contrast, all applied instantly while the panel stays open
 - **Controls**: tap right/left (or swipe, or page buttons) to turn pages, tap the top for the menu
 - **Plugins** with menus, page events and background HTTP tasks ([docs/PLUGIN_API.md](docs/PLUGIN_API.md))
 - **Recap plugin**: menu → **Recap** → *Quick* (the last pages) or *Full story* (everything so far;

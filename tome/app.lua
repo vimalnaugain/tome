@@ -44,6 +44,7 @@ function App.new(opts)
     self.stats = Stats.open(self.data_dir .. "/stats.lua")
     self.settings.contrast = self.settings.contrast or 0
     self.covers = Covers.new(self)
+    self.library = require("tome.library").new(self)
     self.ui = UI.new(self.device)
     if self.settings.rotation and self.settings.rotation ~= 0 then self.ui:set_rotation(self.settings.rotation) end
     if self.settings.contrast ~= 0 then self.ui:set_contrast(self.settings.contrast) end
@@ -193,9 +194,7 @@ function App:save_settings()
 end
 
 function App:show_library()
-    local FileBrowser = require("tome.ui.filebrowser")
-    util.mkdir_p(self.books_dir)
-    self.ui:show(FileBrowser.new(self, self.books_dir))
+    self.ui:show(require("tome.ui.library").new(self))
 end
 
 --- Screen orientation (0, 90, 180, 270), remembered across launches.

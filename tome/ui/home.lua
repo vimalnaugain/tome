@@ -26,9 +26,7 @@ function Home:refresh()
             self.reading[#self.reading + 1] = b
         end
     end
-    local p = io.popen("find " .. util.shell_quote(app.books_dir) .. " -iname '*.epub' 2>/dev/null | wc -l")
-    self.library_count = p and tonumber(p:read("*a"):match("%d+")) or 0
-    if p then p:close() end
+    self.library_count = app.library:scan()
     if self.ui then self.ui:set_dirty("full") end
     -- decode missing covers in the background, redrawing as each is ready
     if #self.reading > 0 then

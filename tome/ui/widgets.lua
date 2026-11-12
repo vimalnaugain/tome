@@ -47,7 +47,22 @@ local function wrap(font, text, maxw)
     local lines = {}
     for para in (text .. "\n"):gmatch("(.-)\n") do
         local line = ""
+        local words = {}
         for word in para:gmatch("%S+") do
+            -- break words wider than the line (paths, URLs) at characters
+            while font:width(word) > maxw do
+                local cut, w = "", 0
+                for ch in word:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+                    local cw = font:width(ch)
+                    if w + cw > maxw and cut ~= "" then break end
+                    cut, w = cut .. ch, w + cw
+                end
+                words[#words + 1] = cut
+                word = word:sub(#cut + 1)
+            end
+            words[#words + 1] = word
+        end
+        for _, word in ipairs(words) do
             local cand = line == "" and word or line .. " " .. word
             if font:width(cand) > maxw and line ~= "" then
                 lines[#lines + 1] = line

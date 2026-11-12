@@ -243,6 +243,26 @@ test("API key files with editor junk are cleaned", function()
     eq(P.clean_key(" sk-ant-api03-abcDEF_123-xyz456789012345 \n"), "sk-ant-api03-abcDEF_123-xyz456789012345")
 end)
 
+test("library finds books in any folder and sorts them", function()
+    local util = require("tome.util")
+    local root = tmp .. "/libroot"
+    os.execute("mkdir -p " .. root .. "/a/b " .. root .. "/.hidden " .. root .. "/system")
+    for _, p in ipairs({ "/a/one.epub", "/a/b/Two.EPUB", "/three.epub", "/.hidden/x.epub", "/system/y.epub", "/a/notes.txt" }) do
+        os.execute("cp " .. BOOK .. " " .. root .. p)
+    end
+    local Library = require("tome.library")
+    local lib = Library.new(app)
+    lib.roots, lib.path, lib.index = { root }, tmp .. "/libindex.lua", {}
+    eq(lib:scan(), 3, "books found (hidden and system folders skipped)")
+    local list = lib:books("title", "all")
+    eq(#list, 3)
+    for _, b in ipairs(list) do assert(not b.path:find("hidden") and not b.path:find("system"), b.path) end
+    -- unchanged files are not re-fingerprinted; removed files disappear
+    os.remove(root .. "/three.epub")
+    eq(lib:scan(), 2)
+    assert(util.file_exists(tmp .. "/libindex.lua"))
+end)
+
 test("image decoders match PIL (baseline, progressive, PNG)", function()
     local Image = require("tome.image")
     local ffi = require("ffi")

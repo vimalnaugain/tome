@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -110,6 +111,16 @@ static int l_absinfo(lua_State *L) {
     lua_pushinteger(L, info.minimum);
     lua_pushinteger(L, info.maximum);
     return 2;
+}
+
+/* stat(path) -> size, mtime, is_dir | nil, err */
+static int l_stat(lua_State *L) {
+    struct stat st;
+    if (stat(luaL_checkstring(L, 1), &st) < 0) return push_errno(L);
+    lua_pushnumber(L, (lua_Number)st.st_size);
+    lua_pushnumber(L, (lua_Number)st.st_mtime);
+    lua_pushboolean(L, S_ISDIR(st.st_mode));
+    return 3;
 }
 
 /* read(fd, max) -> string ("" if nothing available) | nil, err */
@@ -226,6 +237,7 @@ static const luaL_Reg funcs[] = {
     {"absinfo", l_absinfo},
     {"read_events", l_read_events},
     {"read", l_read},
+    {"stat", l_stat},
     {"poll", l_poll},
     {"fbinfo", l_fbinfo},
     {"monotonic_ms", l_monotonic_ms},
