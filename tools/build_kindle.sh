@@ -38,7 +38,8 @@ if [ ! -d "${BUILD}/luajit" ]; then
 fi
 
 # buildvm runs on the build machine but must match the target's pointer size,
-# hence the 32-bit x86 host compiler.
+# hence the 32-bit x86 host compiler. LUAJIT_NO_UNWIND: LuaJIT's own error
+# unwinding, since Zig ships no libgcc ARM unwinder (__gnu_unwind_frame).
 make -C "${BUILD}/luajit/src" -j"$(nproc 2>/dev/null || echo 4)" \
     HOST_CC="${BUILD}/bin/host-cc" \
     CC="${BUILD}/bin/target-cc" \
@@ -46,11 +47,12 @@ make -C "${BUILD}/luajit/src" -j"$(nproc 2>/dev/null || echo 4)" \
     TARGET_STRIP=true \
     TARGET_SYS=Linux \
     BUILDMODE=static \
+    XCFLAGS="-DLUAJIT_NO_UNWIND" \
     libluajit.a
 
 "${BUILD}/bin/target-cc" -O2 -static \
     -I"${BUILD}/luajit/src" \
-    "${ROOT}/native/tome_main.c" "${ROOT}/native/tomecore.c" \
+    "${ROOT}/native/tome_main.c" "${ROOT}/native/tomecore.c" "${ROOT}/native/arm_rt.c" \
     "${BUILD}/luajit/src/libluajit.a" -lm \
     -o "${BUILD}/tome"
 
