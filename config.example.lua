@@ -34,7 +34,7 @@ return {
 
     plugins = {
         recap = {
-            -- Which entry of `providers` to use (also selectable in the Recap menu).
+            -- Which entry of `providers` to use.
             provider = "claude",
             providers = {
                 claude = {
