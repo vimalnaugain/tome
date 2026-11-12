@@ -1,0 +1,25 @@
+{
+	"items": [
+		{
+			"name": "Tome",
+			"priority": 0,
+			"items": [
+				{
+					"name": "Start Tome",
+					"priority": 1,
+					"action": "/mnt/us/tome/tome.sh",
+					"status": false,
+					"exitmenu": true
+				},
+				{
+					"name": "Start Tome (stop framework)",
+					"priority": 2,
+					"action": "/mnt/us/tome/tome.sh",
+					"params": "--framework_stop",
+					"status": false,
+					"exitmenu": true
+				}
+			]
+		}
+	]
+}

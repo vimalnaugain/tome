@@ -1,0 +1,7 @@
+build/
+native/tomecore.so
+data/
+emu_out/
+books/
+config.lua
+*.key
