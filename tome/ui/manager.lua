@@ -181,6 +181,15 @@ end
 
 function UI:dispatch(ev)
     if ev.type == "quit" then self:quit(); return end
+    if ev.type == "power" then
+        if self.power_handler then
+            local ok, err = pcall(self.power_handler, ev)
+            if not ok then log.error("power handler failed:", err) end
+        end
+        return
+    end
+    if self.sleeping then return end -- the screen shows the sleep cover
+    self.last_input_ms = self.device:monotonic_ms()
     local v = self:top()
     if v and v.handle then
         local ok, err = pcall(v.handle, v, ev)
@@ -193,7 +202,8 @@ function UI:quit() self.running = false end
 function UI:run()
     self.running = true
     while self.running do
-        if self.dirty then self:repaint() end
+        if self.dirty and not self.sleeping then self:repaint() end
+        if self.idle_check then self.idle_check() end
         local timeout = 1000
         if #self.tasks > 0 then timeout = 200 end
         local now = self.device:monotonic_ms()

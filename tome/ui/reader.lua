@@ -271,7 +271,7 @@ end
 -- when moving forward one page (for reading-speed learning).
 function Reader:_after_move(chars_read)
     local now = self.app.device:monotonic_ms()
-    if self.last_turn_ms then
+    if self.last_turn_ms and not self.ui.sleeping then
         self.stats:record(self.book_id, (now - self.last_turn_ms) / 1000, chars_read or nil)
     end
     self.last_turn_ms = now
@@ -533,6 +533,20 @@ function Reader:handle(ev)
         self.app:broadcast("ReaderHold", self, ev)
     end
     return true
+end
+
+--- Device going to sleep: count the time on this page, stop the clock.
+function Reader:pause()
+    if self.last_turn_ms then
+        self.stats:record(self.book_id, (self.app.device:monotonic_ms() - self.last_turn_ms) / 1000)
+    end
+    self.last_turn_ms = nil
+    self:_save()
+    self.stats:save()
+end
+
+function Reader:resume()
+    self.last_turn_ms = self.app.device:monotonic_ms()
 end
 
 function Reader:close()

@@ -4,6 +4,7 @@ Desktop emulator. Two input modes:
   * script: reads commands from a file (or stdin) -- used for automated tests
       tap X Y | hold X Y | swipe left|right|up|down | key NAME
       wait MS | idle (wait for background tasks) | shot NAME | quit
+      sleep | wake (power button)
     Every refresh is written to <out_dir>/screen.png; `shot` saves a copy.
   * sdl: an SDL2 window (via LuaJIT FFI, desktop only). Click = tap,
     right-click = hold, drag = swipe, arrows/PgUp/PgDn/Esc/m = keys.
@@ -81,6 +82,11 @@ end
 
 --- `busy_fn` is set by the app: returns true while background tasks run.
 function Emu:poll(timeout_ms)
+    if self.pending_power then
+        local ev = self.pending_power
+        self.pending_power = nil
+        return { ev }
+    end
     if self.sdl then return self.sdl:poll(timeout_ms) end
     if self.waiting_until then
         if now_ms() < self.waiting_until then
@@ -119,6 +125,9 @@ function Emu:poll(timeout_ms)
             util.write_file(self.out_dir .. "/" .. (cmd[2] or "shot") .. ".png", self.canvas:to_png())
         end
         return {}
+    elseif op == "sleep" or op == "wake" then
+        -- simulate the power button
+        return { { type = "power", event = op } }
     elseif op == "quit" then
         return { { type = "quit" } }
     end
@@ -127,6 +136,15 @@ function Emu:poll(timeout_ms)
 end
 
 function Emu:battery() return 87 end
+--- The emulator "suspends" by delivering the sleep event the Kindle would send.
+function Emu:suspend() self.pending_power = { type = "power", event = "sleep" } end
+
+function Emu:show_physical(canvas)
+    local r = self.rotation
+    self.rotation = 0
+    self:refresh(canvas, "full")
+    self.rotation = r
+end
 function Emu:prevent_sleep() end
 function Emu:wifi_enable() end
 function Emu:close()

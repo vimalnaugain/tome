@@ -63,6 +63,26 @@ learned from forward page turns that took 3 s to 3 min (characters on the
 page ÷ time), blended with ~220 words/min until 10 minutes of data exist.
 Similar in spirit to KOReader's statistics plugin, but much smaller.
 
+## Covers and the sleep screen
+
+`epub.lua` finds the cover the way readers usually do: EPUB 3
+`properties="cover-image"`, then EPUB 2 `<meta name="cover">`, then an image
+named like "cover", then the first image of the first page. `image/jpeg.lua`
+(baseline and progressive) and `image/png.lua` decode it in pure Lua,
+luminance only, since the screen is gray. `covers.lua` stores a screen-sized
+master once per book plus each size the UI asks for.
+
+Sleep follows KOReader's approach (koreader-base `input/input-kindle.h`):
+`lipc-wait-event -m com.lab126.powerd goingToScreenSaver,outOfScreenSaver`
+writes into a FIFO that Tome polls together with the touchscreen. On
+`goingToScreenSaver` Tome draws the cover in the panel's native orientation;
+on `outOfScreenSaver` it repaints. On Kindles with ads (detected like
+KOReader, via `lipc-get-prop com.lab126.blanket load` containing
+`ad_screensaver`) Tome lets the Kindle draw its lock screen. Because Tome
+grabs touch input, the Kindle can't tell the user is active, so Tome keeps
+`preventScreenSaver` on and does its own idle timeout, then asks powerd to
+sleep (`powerButton 1`).
+
 ## Known limits
 
 - EPUB only, no DRM (Kindle's own AZW/KFX books can't be read by any third-party app).

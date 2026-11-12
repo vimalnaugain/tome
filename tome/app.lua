@@ -8,6 +8,7 @@ local Http = require("tome.http")
 local Plugins = require("tome.plugins")
 local Font = require("tome.font")
 local Stats = require("tome.stats")
+local Covers = require("tome.covers")
 local util = require("tome.util")
 local json = require("tome.json")
 local log = require("tome.log")
@@ -41,11 +42,13 @@ function App.new(opts)
     for k, v in pairs(cfg.settings or {}) do if self.settings[k] == nil then self.settings[k] = v end end
 
     self.stats = Stats.open(self.data_dir .. "/stats.lua")
+    self.covers = Covers.new(self)
     self.ui = UI.new(self.device)
     if self.settings.rotation and self.settings.rotation ~= 0 then self.ui:set_rotation(self.settings.rotation) end
     self.http = Http.new({ curl = cfg.curl, ca_bundle = cfg.ca_bundle, tmp_dir = cfg.tmp_dir or "/tmp" })
     self.json, self.log, self.util = json, log, util
 
+    self:_setup_power()
     self.plugins = Plugins.new(self)
     for _, dir in ipairs(cfg.plugin_dirs or { self.root .. "/plugins" }) do self.plugins:load_dir(dir) end
     return self
@@ -164,6 +167,8 @@ function App:open_book(path)
     self.ui:show(reader)
     self.ui:set_dirty("full")
     self:broadcast("ReaderReady", reader)
+    -- have the cover ready for the sleep screen
+    self.covers:prepare_all({ { path = path, id = reader.book_id } })
 end
 
 function App:close_reader()
@@ -220,6 +225,92 @@ end
 
 function App:quit()
     self.ui:quit()
+end
+
+------------------------------------------------------------------------------
+-- Sleep: cover on the screen while the Kindle is asleep
+------------------------------------------------------------------------------
+
+--- The book whose cover goes on the sleep screen: the open one, else the
+-- most recent book in progress.
+function App:sleep_book()
+    if self.reader then
+        local r = self.reader
+        return { id = r.book_id, path = r.path, title = r.doc.title, authors = r.doc.authors }
+    end
+    local recent = self:recent_books()
+    return recent[1]
+end
+
+function App:draw_sleep_screen()
+    local d = self.device
+    local Canvas = require("tome.canvas")
+    local Cover = require("tome.ui.cover")
+    local c = Canvas.new(d.phys_w or d.width, d.phys_h or d.height)
+    local book = self:sleep_book()
+    if book then
+        -- make sure the cover is decoded (about a second on a Kindle, once per book)
+        if book.id and book.path then pcall(self.covers.prepare, self.covers, book.path, book.id) end
+        local mode = (self.settings.sleep_screen == "cover_fill") and "fill" or "fit"
+        Cover.draw(self, c, 0, 0, c.w, c.h, book, mode)
+    else
+        local f = Font.get("serif", "b", math.floor(d.dpi * 0.2))
+        c:text(f, "Tome", (c.w - f:width("Tome")) / 2, c.h / 2)
+    end
+    d:show_physical(c)
+end
+
+function App:on_sleep()
+    if self.ui.sleeping then return end
+    self.ui.sleeping = true
+    log.info("going to sleep")
+    if self.reader then self.reader:pause() end
+    self:broadcast("Suspend")
+    if self.device.special_offers then
+        -- The lock-screen ad is drawn by the Kindle UI: let it run while asleep.
+        if os.getenv("AWESOME_STOPPED") == "yes" then os.execute("killall -CONT awesome") end
+        return
+    end
+    if (self.settings.sleep_screen or "cover") ~= "off" then
+        local ok, err = pcall(self.draw_sleep_screen, self)
+        if not ok then log.error("sleep screen failed:", err) end
+    end
+end
+
+function App:on_wake()
+    if not self.ui.sleeping then return end
+    self.ui.sleeping = false
+    log.info("waking up")
+    self.ui.last_input_ms = self.device:monotonic_ms()
+    if self.reader then self.reader:resume() end
+    self:broadcast("Resume")
+    if self.device.special_offers and os.getenv("AWESOME_STOPPED") == "yes" then
+        os.execute("killall -STOP awesome")
+        -- the Kindle UI may still be drawing; repaint once it's done
+        self.ui:schedule(2500, function() self.ui:set_dirty("full") end)
+    end
+    self.ui:set_dirty("full")
+end
+
+function App:_setup_power()
+    local ui, d = self.ui, self.device
+    ui.power_handler = function(ev)
+        if ev.event == "sleep" then self:on_sleep() elseif ev.event == "wake" then self:on_wake() end
+    end
+    ui.last_input_ms = d:monotonic_ms()
+    -- Tome keeps the Kindle awake while it runs (the Kindle can't see our
+    -- taps), so it does its own idle timeout and then asks the system to
+    -- sleep, which in turn brings up the sleep cover.
+    ui.idle_check = function()
+        local minutes = self.settings.sleep_after_minutes or self.config.sleep_after_minutes or 10
+        if minutes <= 0 or ui.sleeping or #ui.tasks > 0 then return end
+        local now = d:monotonic_ms()
+        if now - ui.last_input_ms > minutes * 60000 then
+            ui.last_input_ms = now
+            log.info("idle for", minutes, "minutes: suspending")
+            if d.suspend then d:suspend() end
+        end
+    end
 end
 
 function App:run(open_path)

@@ -112,6 +112,21 @@ static int l_absinfo(lua_State *L) {
     return 2;
 }
 
+/* read(fd, max) -> string ("" if nothing available) | nil, err */
+static int l_read(lua_State *L) {
+    int fd = (int)luaL_checkinteger(L, 1);
+    size_t max = (size_t)luaL_optinteger(L, 2, 4096);
+    char buf[4096];
+    if (max > sizeof(buf)) max = sizeof(buf);
+    ssize_t r = read(fd, buf, max);
+    if (r < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) { lua_pushliteral(L, ""); return 1; }
+        return push_errno(L);
+    }
+    lua_pushlstring(L, buf, (size_t)r);
+    return 1;
+}
+
 /* read_events(fd) -> { {type, code, value}, ... }  (drains a non-blocking fd) */
 static int l_read_events(lua_State *L) {
     int fd = (int)luaL_checkinteger(L, 1);
@@ -210,6 +225,7 @@ static const luaL_Reg funcs[] = {
     {"caps", l_caps},
     {"absinfo", l_absinfo},
     {"read_events", l_read_events},
+    {"read", l_read},
     {"poll", l_poll},
     {"fbinfo", l_fbinfo},
     {"monotonic_ms", l_monotonic_ms},

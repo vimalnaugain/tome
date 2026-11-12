@@ -5,6 +5,7 @@ The story is original filler written for Tome's tests; each chapter has
 distinct events so a recap can be checked for spoilers (chapters after the
 reading position must never leak into a recap).
 """
+import io
 import sys
 import zipfile
 
@@ -67,7 +68,39 @@ def xhtml(title, paras):
 """
 
 
-def main(out, repeat=1):
+def make_cover_jpeg(progressive=False):
+    """A simple illustrated cover: sky, sea, lighthouse with a beam, title."""
+    from PIL import Image, ImageDraw, ImageFont
+    w, h = 1000, 1500
+    im = Image.new("RGB", (w, h), (24, 38, 74))
+    d = ImageDraw.Draw(im)
+    for y in range(900):  # night sky gradient
+        c = int(24 + y / 900 * 60)
+        d.line([(0, y), (w, y)], fill=(c, c + 14, c + 50))
+    d.rectangle([0, 900, w, h], fill=(16, 52, 80))
+    for i in range(0, w, 40):  # waves
+        d.arc([i, 930, i + 80, 990], 200, 340, fill=(120, 170, 200), width=4)
+    d.polygon([(430, 900), (570, 900), (540, 430), (460, 430)], fill=(236, 230, 214))
+    for y in (520, 640, 760):
+        d.rectangle([452, y, 548, y + 40], fill=(170, 40, 40))
+    d.rectangle([450, 380, 550, 430], fill=(250, 220, 120))
+    d.polygon([(500, 405), (0, 250), (0, 560)], fill=(250, 236, 170))
+    d.polygon([(380, 900), (620, 900), (700, 1000), (300, 1000)], fill=(60, 60, 60))
+    font = ImageFont.truetype("/usr/share/fonts/truetype/crosextra/Caladea-Bold.ttf", 96)
+    small = ImageFont.truetype("/usr/share/fonts/truetype/crosextra/Caladea-Italic.ttf", 54)
+    for i, line in enumerate(["The Lighthouse", "at Gull's Reach"]):
+        tw = d.textlength(line, font=font)
+        d.text(((w - tw) / 2, 1080 + i * 110), line, font=font, fill=(250, 246, 230))
+    a = "Tome Test Fixtures"
+    d.text(((w - d.textlength(a, font=small)) / 2, 1360), a, font=small, fill=(210, 220, 230))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=85, progressive=progressive)
+    return buf.getvalue()
+
+
+def main(out, repeat=1, cover="epub3"):
+    """cover: "epub3" (properties=cover-image), "meta" (EPUB2 <meta name=cover>),
+    "html" (only an <img> in the first chapter), "progressive", or "none"."""
     with zipfile.ZipFile(out, "w") as z:
         z.writestr(zipfile.ZipInfo("mimetype"), "application/epub+zip", compress_type=zipfile.ZIP_STORED)
         z.writestr("META-INF/container.xml", """<?xml version="1.0"?>
@@ -75,9 +108,22 @@ def main(out, repeat=1):
   <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
 </container>""", compress_type=zipfile.ZIP_DEFLATED)
         manifest, spine, navli, ncx = [], [], [], []
+        meta_cover = ""
+        if cover != "none":
+            z.writestr("OEBPS/images/cover.jpg", make_cover_jpeg(cover == "progressive"))
+            if cover in ("epub3", "progressive"):
+                manifest.append('<item id="cimg" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/>')
+            elif cover == "meta":
+                manifest.append('<item id="img01" href="images/cover.jpg" media-type="image/jpeg"/>')
+                meta_cover = '<meta name="cover" content="img01"/>'
+            else:  # html: an unnamed image used on the first page
+                manifest.append('<item id="i1" href="images/cover.jpg" media-type="image/jpeg"/>')
         for i, (title, paras) in enumerate(CHAPTERS, 1):
             name = f"text/ch{i:02d}.xhtml"
-            z.writestr("OEBPS/" + name, xhtml(title, paras * repeat), compress_type=zipfile.ZIP_DEFLATED)
+            body = xhtml(title, paras * repeat)
+            if i == 1 and cover == "html":
+                body = body.replace("<body>", '<body><div><img src="../images/cover.jpg" alt=""/></div>')
+            z.writestr("OEBPS/" + name, body, compress_type=zipfile.ZIP_DEFLATED)
             manifest.append(f'<item id="ch{i}" href="{name}" media-type="application/xhtml+xml"/>')
             spine.append(f'<itemref idref="ch{i}"/>')
             navli.append(f'<li><a href="{name}#top">{title}</a></li>')
@@ -92,7 +138,7 @@ def main(out, repeat=1):
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="uid">tome-test-0001</dc:identifier>
-<dc:title>{TITLE}</dc:title><dc:creator>{AUTHOR}</dc:creator><dc:language>en</dc:language>
+{meta_cover}<dc:title>{TITLE}</dc:title><dc:creator>{AUTHOR}</dc:creator><dc:language>en</dc:language>
 </metadata>
 <manifest>
 <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
@@ -105,4 +151,6 @@ def main(out, repeat=1):
 
 if __name__ == "__main__":
     # optional second argument: repeat each chapter's text N times (longer chapters)
-    main(sys.argv[1] if len(sys.argv) > 1 else "test.epub", int(sys.argv[2]) if len(sys.argv) > 2 else 1)
+    # optional third argument: cover style (see main)
+    main(sys.argv[1] if len(sys.argv) > 1 else "test.epub", int(sys.argv[2]) if len(sys.argv) > 2 else 1,
+         sys.argv[3] if len(sys.argv) > 3 else "epub3")

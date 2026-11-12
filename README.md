@@ -20,7 +20,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Progress**: a thin progress bar with chapter marks; tap it to cycle between
   *time left in chapter · %*, *page in chapter · time left in book*, *clock · battery*, and bar only.
   Time left is based on your own reading speed, learned as you read
-- **Library** with reading progress for every book; "Mark as finished" in the reader menu
+- **Covers**: the EPUB's own cover (JPEG, including progressive, or PNG) on the home screen and as
+  thumbnails in the library, with a typographic tile for books without one
+- **Sleep screen**: press the power button (or leave the Kindle idle for 10 minutes) and the cover
+  of the book you're reading fills the screen, like the Kindle's "show book cover" option. On Kindles
+  with ads ("Special Offers"), the Kindle draws its ad there instead
+- **Library** with titles, authors, covers and reading progress; "Mark as finished" in the reader menu
 - **Controls**: tap right/left (or swipe, or page buttons) to turn pages, tap the top for the menu
 - **Plugins** with menus, page events and background HTTP tasks ([docs/PLUGIN_API.md](docs/PLUGIN_API.md))
 - **Recap plugin**: menu → **Recap** → *Quick* (the last pages) or *Full story* (everything so far;

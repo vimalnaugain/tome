@@ -4,6 +4,7 @@ books in progress, a few reading stats, and the way into the library.
 --]]
 local Font = require("tome.font")
 local Stats = require("tome.stats")
+local Cover = require("tome.ui.cover")
 local W = require("tome.ui.widgets")
 local util = require("tome.util")
 
@@ -29,35 +30,16 @@ function Home:refresh()
     self.library_count = p and tonumber(p:read("*a"):match("%d+")) or 0
     if p then p:close() end
     if self.ui then self.ui:set_dirty("full") end
+    -- decode missing covers in the background, redrawing as each is ready
+    if #self.reading > 0 then
+        if self.cover_task then self.cover_task.cancel() end
+        self.cover_task = app.covers:prepare_all(self.reading, function()
+            if self.ui and self.ui:top() == self then self.ui:set_dirty("partial") end
+        end)
+    end
 end
 
 function Home:on_show() self:refresh() end
-
--- Typographic "cover": title and author set in a framed tile.
-local function draw_cover(c, x, y, w, h, title, author, border, dpi)
-    local k = dpi / 300 -- font sizes below are for a 300 dpi screen
-    c:fill_rect(x, y, w, h, 238)
-    c:rect(x, y, w, h, 0, border)
-    c:rect(x + border * 3, y + border * 3, w - border * 6, h - border * 6, 120, 1)
-    local inner = w - border * 14
-    local font, lines
-    for _, px in ipairs({ 34, 30, 26, 22 }) do
-        font = Font.get("serif", "b", math.floor(px * k))
-        lines = W.wrap(font, title or "", inner)
-        if #lines <= 5 then break end
-    end
-    local ty = y + math.floor(h * 0.22)
-    for i = 1, math.min(#lines, 5) do
-        local l = lines[i]
-        c:text(font, l, x + (w - font:width(l)) / 2, ty)
-        ty = ty + font.line_height
-    end
-    if author and author ~= "" then
-        local f = Font.get("serif", "i", math.floor(22 * k))
-        local a = W.fit(f, author, inner)
-        c:text(f, a, x + (w - f:width(a)) / 2, y + h - border * 8, 60)
-    end
-end
 
 local function progress_bar(c, x, y, w, frac, t)
     local h = math.max(6, t.border * 3)
@@ -141,7 +123,7 @@ function Home:draw(c)
     local avail = sy - y - pad * 2
     local cover_w = math.floor(math.min(w * 0.3, avail / 1.5))
     local cover_h = math.floor(cover_w * 1.5)
-    draw_cover(c, mx, y, cover_w, cover_h, cur.title, authors_of(cur), t.border, app.device.dpi)
+    Cover.draw(app, c, mx, y, cover_w, cover_h, cur, "fill")
     local tx = mx + cover_w + pad * 2
     local text_w = w - tx - mx
     local tf = Font.get("serif", "b", math.floor(app.device.dpi * 0.13))

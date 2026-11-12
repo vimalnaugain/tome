@@ -51,6 +51,7 @@ Errors in any plugin method are caught and logged; they never crash Tome.
 | `onPageChanged(reader, pos)` | after every page turn / jump |
 | `onReaderHold(reader, ev)` | long-press on the page (`ev.x`, `ev.y`) |
 | `onReaderClose(reader)` | before the book closes |
+| `onSuspend()` / `onResume()` | the Kindle goes to sleep / wakes up |
 | `onExit(app)` | Tome is quitting |
 | `addToReaderMenu(items, reader)` | reader menu is opening; append/insert items |
 | `addToMainMenu(items)` | library menu (Menu key) is opening |

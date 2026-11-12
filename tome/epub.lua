@@ -74,6 +74,11 @@ function Epub:_load()
             if a["media-type"] == "application/x-dtbncx+xml" then ncx_href = manifest[a.id].href end
         end
     end
+    self.manifest = manifest
+    -- EPUB 2 cover hint: <meta name="cover" content="item-id"/>
+    for _, m in ipairs(xml.find_all(meta, "meta")) do
+        if m.attrs.name == "cover" and m.attrs.content then self.cover_meta_id = m.attrs.content end
+    end
     local spine = xml.find(opf, "spine")
     if spine and spine.attrs.toc and manifest[spine.attrs.toc] then ncx_href = manifest[spine.attrs.toc].href end
 
@@ -252,6 +257,55 @@ function Epub:text_range(from, to)
         end
     end
     return table.concat(parts, "\n\n")
+end
+
+local function is_image(item)
+    local t = (item.type or ""):lower()
+    if t:find("^image/") then return true end
+    return item.href:lower():match("%.jpe?g$") or item.href:lower():match("%.png$")
+end
+
+--- Path (inside the zip) of the cover image, or nil. Tries, in order:
+-- EPUB3 properties="cover-image", EPUB2 <meta name="cover">, an image item
+-- named like "cover", then the first image of the first spine document.
+function Epub:cover_path()
+    if self._cover ~= nil then return self._cover or nil end
+    local found
+    for _, item in pairs(self.manifest) do
+        if item.props:find("cover%-image") and is_image(item) then found = item.href end
+    end
+    if not found and self.cover_meta_id then
+        local item = self.manifest[self.cover_meta_id]
+        if not item then
+            -- some books put the href (not the id) in the meta tag
+            for _, it in pairs(self.manifest) do
+                if it.href:match("[^/]+$") == self.cover_meta_id then item = it end
+            end
+        end
+        if item and is_image(item) then found = item.href end
+    end
+    if not found then
+        for id, item in pairs(self.manifest) do
+            if is_image(item) and (id:lower():find("cover") or item.href:lower():match("cover[^/]*$")) then
+                found = item.href
+                break
+            end
+        end
+    end
+    if not found and self.chapters[1] then
+        local src = self.zip:read(self.chapters[1].href) or ""
+        local img = src:match("<[%w:]*img[^>]-src%s*=%s*[\"']([^\"']+)")
+            or src:match("<[%w:]*image[^>]-href%s*=%s*[\"']([^\"']+)")
+        if img then found = resolve(self.chapters[1].href, img) end
+    end
+    self._cover = found or false
+    return found
+end
+
+--- Raw bytes of the cover image, or nil.
+function Epub:cover_data()
+    local p = self:cover_path()
+    return p and self.zip:read(p) or nil
 end
 
 function Epub:close()

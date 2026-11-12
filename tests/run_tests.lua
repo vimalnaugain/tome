@@ -221,6 +221,86 @@ test("reading stats, speed and time left", function()
     eq(math.floor(reader:position().percent), 0)
 end)
 
+test("image decoders match PIL (baseline, progressive, PNG)", function()
+    local Image = require("tome.image")
+    local ffi = require("ffi")
+    local script = [[
+import sys, io, random
+from PIL import Image, ImageDraw
+random.seed(3)
+im = Image.new("RGB", (333, 517), (200, 120, 60))
+d = ImageDraw.Draw(im)
+for i in range(30):
+    x, y = random.randint(0, 300), random.randint(0, 480)
+    d.ellipse([x, y, x + random.randint(5, 120), y + random.randint(5, 120)], fill=tuple(random.randint(0, 255) for _ in range(3)))
+out = sys.argv[1]
+im.save(out + "/a.jpg", quality=85)
+im.save(out + "/b.jpg", quality=85, progressive=True)
+im.save(out + "/c.jpg", quality=85, progressive=True, restart_marker_rows=1, subsampling=0)
+im.convert("P").save(out + "/d.png")
+im.convert("RGBA").save(out + "/e.png")
+for f in "a.jpg b.jpg c.jpg d.png e.png".split():
+    open(out + "/" + f + ".ref", "wb").write(Image.open(out + "/" + f).convert("L").tobytes())
+]]
+    local f = io.open(tmp .. "/mkimg.py", "w"); f:write(script); f:close()
+    assert(os.execute("python3 " .. tmp .. "/mkimg.py " .. tmp) == 0, "python failed")
+    for _, name in ipairs({ "a.jpg", "b.jpg", "c.jpg", "d.png", "e.png" }) do
+        local img, err = Image.decode(io.open(tmp .. "/" .. name, "rb"):read("*a"))
+        assert(img, name .. ": " .. tostring(err))
+        eq(img.w, 333); eq(img.h, 517)
+        local ref = io.open(tmp .. "/" .. name .. ".ref", "rb"):read("*a")
+        local diff = 0
+        for i = 0, img.w * img.h - 1 do diff = diff + math.abs(img.buf[i] - ref:byte(i + 1)) end
+        assert(diff / (img.w * img.h) < 1.0, name .. " differs from PIL by " .. diff / (img.w * img.h))
+    end
+    local small = Image.resize(Image.decode(io.open(tmp .. "/a.jpg", "rb"):read("*a")), 50, 80)
+    eq(small.w, 50); eq(small.h, 80)
+end)
+
+test("cover detection in all EPUB styles", function()
+    local Epub = require("tome.epub")
+    for _, style in ipairs({ "epub3", "meta", "html", "progressive", "none" }) do
+        local path = tmp .. "/cov_" .. style .. ".epub"
+        assert(os.execute("python3 tools/make_test_epub.py " .. path .. " 1 " .. style) == 0)
+        local b = assert(Epub.open(path))
+        local p = b:cover_path()
+        if style == "none" then eq(p, nil, style) else eq(p, "OEBPS/images/cover.jpg", style) end
+        b:close()
+    end
+end)
+
+test("cover cache and sleep screen", function()
+    local util = require("tome.util")
+    local covers = app.covers
+    local id = util.file_fingerprint(BOOK)
+    assert(covers:prepare(BOOK, id), "fixture should have a cover")
+    local img = covers:get(id, 100, 150, "fill")
+    eq(img.w, 100); eq(img.h, 150)
+    local fit = covers:get(id, 300, 300, "fit")
+    eq(fit.h, 300); assert(fit.w < 300)
+    eq(covers:meta(id).title, "The Lighthouse at Gull's Reach")
+    -- a book without a cover is remembered as such
+    local none = tmp .. "/cov_none.epub"
+    local nid = util.file_fingerprint(none)
+    eq(covers:prepare(none, nid), false); assert(covers:has_none(nid))
+    -- power button: sleep draws the cover, input is ignored, wake restores
+    app:open_book(BOOK)
+    local refreshes = app.device.refresh_count
+    app.ui:dispatch({ type = "power", event = "sleep" })
+    assert(app.ui.sleeping, "should be sleeping")
+    eq(app.device.refresh_count, refreshes + 1)
+    local c = app.device.canvas
+    local dark = 0
+    for i = 0, c.w * c.h - 1, 97 do if c.buf[i] < 128 then dark = dark + 1 end end
+    assert(dark > (c.w * c.h / 97) * 0.3, "sleep screen should show the (dark) cover")
+    local page = app.reader:position().page
+    app.ui:dispatch({ type = "tap", x = 900, y = 800 })
+    eq(app.reader:position().page, page, "taps while asleep must not turn pages")
+    app.ui:dispatch({ type = "power", event = "wake" })
+    assert(not app.ui.sleeping)
+    reader = app.reader
+end)
+
 app.reader:close()
 print(string.format("\n%d passed, %d failed", passed, failed))
 os.execute("rm -rf " .. tmp)

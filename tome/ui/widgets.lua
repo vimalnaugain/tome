@@ -217,7 +217,7 @@ W.ListView = ListView
 function ListView.new(opts)
     return setmetatable({ title = opts.title, items = opts.items or {}, page = 1,
         on_close = opts.on_close, closable = opts.closable ~= false, refresh_mode = "full", fullscreen = true,
-        start_index = opts.start_index }, ListView)
+        start_index = opts.start_index, icons = opts.icons }, ListView)
 end
 
 function ListView:set_items(items, title)
@@ -231,7 +231,8 @@ function ListView:draw(c)
     local t = W.theme(self.ui)
     c:fill_rect(0, 0, c.w, c.h, 255)
     title_bar(self, c, self.title)
-    local row_h = math.floor(t.row_h * 1.15)
+    -- With icons (book covers) rows are taller and text moves right.
+    local row_h = math.floor(t.row_h * (self.icons and 1.7 or 1.15))
     self.per_page = math.max(1, math.floor((c.h - 2 * t.bar_h) / row_h))
     self.pages = math.max(1, math.ceil(#self.items / self.per_page))
     if self.start_index then
@@ -246,6 +247,15 @@ function ListView:draw(c)
         local it = self.items[i]
         local font = it.bold and t.bold or t.font
         local indent = (it.depth and (it.depth - 1) * t.pad * 2 or 0) + 2 * t.pad
+        if self.icons then
+            local ih = row_h - 2 * t.pad
+            local iw = math.floor(ih * 0.68)
+            if it.icon then
+                local ok, err = pcall(it.icon, c, indent, y + t.pad, iw, ih)
+                if not ok then require("tome.log").warn("icon draw failed:", err) end
+            end
+            indent = indent + iw + 2 * t.pad
+        end
         local base = y + (row_h + font.ascent - font.descent) / 2
         if it.subtext then base = y + row_h * 0.45 end
         c:text(font, fit(font, it.text or "?", c.w - indent - 2 * t.pad), indent, base)

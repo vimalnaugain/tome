@@ -68,6 +68,13 @@ function Kindle.new(config)
 
     self.gestures = Gestures.new({ tap_slop = math.floor(self.dpi / 10) })
     self:_open_inputs()
+    if c.sleep_events ~= false then self:_listen_power() end
+    -- Kindles with ads ("Special Offers") show an ad on the lock screen,
+    -- which the system draws over anything we put there.
+    local p = io.popen("lipc-get-prop com.lab126.blanket load 2>/dev/null")
+    local blanket = p and p:read("*a") or ""
+    if p then p:close() end
+    self.special_offers = blanket:find("ad_screensaver") ~= nil
     return self
 end
 
@@ -107,6 +114,46 @@ function Kindle:_open_inputs()
         end
     end
     if #self.inputs == 0 then log.warn("no input devices found") end
+end
+
+--- Power button / cover events from the Kindle's power daemon, via
+-- `lipc-wait-event` writing into a FIFO we poll together with the touch
+-- screen (KOReader does the same through a helper process).
+function Kindle:_listen_power()
+    local fifo = "/tmp/tome_power.fifo"
+    os.execute("rm -f " .. fifo .. " && mkfifo " .. fifo)
+    -- O_RDWR: the FIFO never reports end-of-file while we hold it open
+    local fd = core.open(fifo, true, true)
+    if not fd then log.warn("power events unavailable (no FIFO)"); return end
+    os.execute("lipc-wait-event -m -s 0 com.lab126.powerd goingToScreenSaver,outOfScreenSaver > " .. fifo
+        .. " 2>/dev/null & echo $! > /tmp/tome_power.pid")
+    self.power_fd, self.power_fifo, self.power_buf = fd, fifo, ""
+    log.info("listening for power events")
+end
+
+function Kindle:_read_power(out)
+    local s = core.read(self.power_fd, 4096)
+    if not s or s == "" then return end
+    self.power_buf = self.power_buf .. s
+    for line in self.power_buf:gmatch("([^\n]*)\n") do
+        log.info("power event:", line)
+        if line:find("^goingToScreenSaver") then out[#out + 1] = { type = "power", event = "sleep" }
+        elseif line:find("^outOfScreenSaver") then out[#out + 1] = { type = "power", event = "wake" } end
+    end
+    self.power_buf = self.power_buf:match("[^\n]*$")
+end
+
+--- Ask the system to go to sleep, as if the power button was pressed.
+function Kindle:suspend()
+    sh("lipc-set-prop -i com.lab126.powerd powerButton 1")
+end
+
+--- Show a canvas in the panel's native orientation (sleep screen).
+function Kindle:show_physical(canvas)
+    local r = self.rotation
+    self.rotation = 0
+    self:refresh(canvas, "full")
+    self.rotation = r
 end
 
 --- Map raw touch coordinates to screen pixels.
@@ -169,6 +216,7 @@ end
 function Kindle:poll(timeout_ms)
     local fds = {}
     for _, d in ipairs(self.inputs) do fds[#fds + 1] = d.fd end
+    if self.power_fd then fds[#fds + 1] = self.power_fd end
     local out = {}
     if #fds == 0 then core.sleep_ms(timeout_ms or 100); return out end
     local ready = core.poll(fds, timeout_ms or -1)
@@ -176,6 +224,7 @@ function Kindle:poll(timeout_ms)
     for _, dev in ipairs(self.inputs) do
         if ready[dev.fd] then self:_handle_events(dev, core.read_events(dev.fd), now, out) end
     end
+    if self.power_fd and ready[self.power_fd] then self:_read_power(out) end
     return out
 end
 
@@ -236,6 +285,13 @@ function Kindle:close()
         core.close(d.fd)
     end
     self.inputs = {}
+    if self.power_fd then
+        local pid = tonumber(util.read_file("/tmp/tome_power.pid") or "")
+        if pid then core.kill(pid) end
+        core.close(self.power_fd)
+        os.remove(self.power_fifo)
+        self.power_fd = nil
+    end
     self:prevent_sleep(false)
 end
 

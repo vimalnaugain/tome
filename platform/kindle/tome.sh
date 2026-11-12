@@ -33,6 +33,8 @@ else
         # doesn't draw over our pages.
         lipc-set-prop com.lab126.pillow disableEnablePillow disable 2>/dev/null && PILLOW_DISABLED=yes
         if killall -STOP awesome 2>/dev/null; then AWESOME_STOPPED=yes; fi
+        # Tome lets the window manager run while asleep on Kindles with ads
+        export AWESOME_STOPPED
     else
         killall -STOP cvm 2>/dev/null
     fi

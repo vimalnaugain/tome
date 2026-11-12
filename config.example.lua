@@ -6,6 +6,10 @@ return {
     -- books_dir = "/mnt/us/documents",
     -- data_dir = "/mnt/us/tome/data",
 
+    -- Sleep: Tome keeps the Kindle awake while it runs and puts it to sleep
+    -- itself after this many idle minutes (0 = never). The power button works as usual.
+    -- sleep_after_minutes = 10,
+
     -- log_level = "info",            -- "debug" for troubleshooting
     -- log_file = "/mnt/us/tome/tome.log",
 
@@ -25,6 +29,7 @@ return {
     settings = {
         reader = { font_size = 34, line_spacing = 1.3, justify = true },
         -- resume_last = true,         -- reopen the last book on start
+        -- sleep_screen = "cover",     -- "cover" (whole cover), "cover_fill" (fills the screen), "off"
     },
 
     plugins = {
