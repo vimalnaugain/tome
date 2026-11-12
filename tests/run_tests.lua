@@ -13,6 +13,11 @@ local function test(name, fn)
     if ok then passed = passed + 1; print("ok   " .. name)
     else failed = failed + 1; print("FAIL " .. name .. "\n" .. tostring(err)) end
 end
+--- os.execute succeeded? (0 in Lua 5.1, true with LuaJIT's 5.2 compat mode)
+local function sh_ok(cmd)
+    local r = os.execute(cmd)
+    return r == 0 or r == true
+end
 local function eq(a, b, msg)
     if a ~= b then error((msg or "") .. " expected " .. tostring(b) .. ", got " .. tostring(a), 2) end
 end
@@ -243,7 +248,7 @@ for f in "a.jpg b.jpg c.jpg d.png e.png".split():
     open(out + "/" + f + ".ref", "wb").write(Image.open(out + "/" + f).convert("L").tobytes())
 ]]
     local f = io.open(tmp .. "/mkimg.py", "w"); f:write(script); f:close()
-    assert(os.execute("python3 " .. tmp .. "/mkimg.py " .. tmp) == 0, "python failed")
+    assert(sh_ok("python3 " .. tmp .. "/mkimg.py " .. tmp), "python failed")
     for _, name in ipairs({ "a.jpg", "b.jpg", "c.jpg", "d.png", "e.png" }) do
         local img, err = Image.decode(io.open(tmp .. "/" .. name, "rb"):read("*a"))
         assert(img, name .. ": " .. tostring(err))
@@ -261,7 +266,7 @@ test("cover detection in all EPUB styles", function()
     local Epub = require("tome.epub")
     for _, style in ipairs({ "epub3", "meta", "html", "progressive", "none" }) do
         local path = tmp .. "/cov_" .. style .. ".epub"
-        assert(os.execute("python3 tools/make_test_epub.py " .. path .. " 1 " .. style) == 0)
+        assert(sh_ok("python3 tools/make_test_epub.py " .. path .. " 1 " .. style))
         local b = assert(Epub.open(path))
         local p = b:cover_path()
         if style == "none" then eq(p, nil, style) else eq(p, "OEBPS/images/cover.jpg", style) end

@@ -86,8 +86,13 @@ def make_cover_jpeg(progressive=False):
     d.rectangle([450, 380, 550, 430], fill=(250, 220, 120))
     d.polygon([(500, 405), (0, 250), (0, 560)], fill=(250, 236, 170))
     d.polygon([(380, 900), (620, 900), (700, 1000), (300, 1000)], fill=(60, 60, 60))
-    font = ImageFont.truetype("/usr/share/fonts/truetype/crosextra/Caladea-Bold.ttf", 96)
-    small = ImageFont.truetype("/usr/share/fonts/truetype/crosextra/Caladea-Italic.ttf", 54)
+    def load(path, size):
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:  # font not installed (e.g. CI): Pillow's built-in font
+            return ImageFont.load_default(size)
+    font = load("/usr/share/fonts/truetype/crosextra/Caladea-Bold.ttf", 96)
+    small = load("/usr/share/fonts/truetype/crosextra/Caladea-Italic.ttf", 54)
     for i, line in enumerate(["The Lighthouse", "at Gull's Reach"]):
         tw = d.textlength(line, font=font)
         d.text(((w - tw) / 2, 1080 + i * 110), line, font=font, fill=(250, 246, 230))
